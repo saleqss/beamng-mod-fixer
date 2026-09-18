@@ -256,7 +256,7 @@ def process_mod_archive(
     try:
         with zipfile.ZipFile(archive_path, "r") as src_zf:
             with zipfile.ZipFile(
-                temp_target, "w", compression=zipfile.ZIP_DEFLATED
+                temp_target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1
             ) as dst_zf:
                 for entry in src_zf.infolist():
                     if entry.filename in modified_jbeams:
@@ -323,6 +323,7 @@ def scan_and_fix_mods(
     mods_dir: Path | str,
     dry_run: bool = False,
     progress_callback: Optional[Callable[[Path, ModArchiveReport, int, int], None]] = None,
+    max_workers: Optional[int] = None,
 ) -> OverallSummary:
     """Scan a directory for BeamNG mod ZIP archives and fix broken headlights.
 
@@ -331,6 +332,7 @@ def scan_and_fix_mods(
         dry_run: If True, analyze and preview changes without modifying files on disk.
         progress_callback: Optional callback invoked after each archive is processed.
                            Signature: callback(path, report, index, total_count)
+        max_workers: Maximum number of worker threads for parallel archive processing.
 
     Returns:
         OverallSummary with aggregated counts across all scanned archives.
@@ -351,29 +353,73 @@ def scan_and_fix_mods(
     )
     total_files = len(zip_files)
 
-    for idx, zip_path in enumerate(zip_files, start=1):
-        report = process_mod_archive(zip_path, dry_run=dry_run)
-        summary.total_scanned += 1
-        summary.jbeams_inspected += report.jbeams_inspected
-        summary.jbeams_fixed += report.jbeams_modified
-        summary.shadows_fixed += report.shadows_fixed
-        summary.archive_reports.append(report)
+    if max_workers is None:
+        max_workers = min(6, os.cpu_count() or 4)
 
-        if report.status == ModStatus.FIXED.value:
-            summary.modified_archives += 1
-        elif report.status == ModStatus.CLEAN.value:
-            summary.clean_archives += 1
-        elif report.status == ModStatus.LOCKED.value:
-            summary.skipped_locked += 1
-        elif report.status == ModStatus.CORRUPT.value:
-            summary.skipped_corrupt += 1
-        elif report.status == ModStatus.ENCRYPTED.value:
-            summary.skipped_encrypted += 1
-        elif report.status == ModStatus.ERROR.value:
-            summary.errors_encountered += 1
+    if dry_run or total_files <= 1 or max_workers <= 1:
+        for idx, zip_path in enumerate(zip_files, start=1):
+            report = process_mod_archive(zip_path, dry_run=dry_run)
+            summary.total_scanned += 1
+            summary.jbeams_inspected += report.jbeams_inspected
+            summary.jbeams_fixed += report.jbeams_modified
+            summary.shadows_fixed += report.shadows_fixed
+            summary.archive_reports.append(report)
 
-        if progress_callback is not None:
-            progress_callback(zip_path, report, idx, total_files)
+            if report.status == ModStatus.FIXED.value:
+                summary.modified_archives += 1
+            elif report.status == ModStatus.CLEAN.value:
+                summary.clean_archives += 1
+            elif report.status == ModStatus.LOCKED.value:
+                summary.skipped_locked += 1
+            elif report.status == ModStatus.CORRUPT.value:
+                summary.skipped_corrupt += 1
+            elif report.status == ModStatus.ENCRYPTED.value:
+                summary.skipped_encrypted += 1
+            elif report.status == ModStatus.ERROR.value:
+                summary.errors_encountered += 1
+
+            if progress_callback is not None:
+                progress_callback(zip_path, report, idx, total_files)
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        completed_count = 0
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_zip = {
+                executor.submit(process_mod_archive, zp, dry_run=False): zp
+                for zp in zip_files
+            }
+            for future in as_completed(future_to_zip):
+                zip_path = future_to_zip[future]
+                completed_count += 1
+                try:
+                    report = future.result()
+                except Exception as e:
+                    report = ModArchiveReport(archive_path=zip_path)
+                    report.status = ModStatus.ERROR.value
+                    report.error_message = str(e)
+
+                summary.total_scanned += 1
+                summary.jbeams_inspected += report.jbeams_inspected
+                summary.jbeams_fixed += report.jbeams_modified
+                summary.shadows_fixed += report.shadows_fixed
+                summary.archive_reports.append(report)
+
+                if report.status == ModStatus.FIXED.value:
+                    summary.modified_archives += 1
+                elif report.status == ModStatus.CLEAN.value:
+                    summary.clean_archives += 1
+                elif report.status == ModStatus.LOCKED.value:
+                    summary.skipped_locked += 1
+                elif report.status == ModStatus.CORRUPT.value:
+                    summary.skipped_corrupt += 1
+                elif report.status == ModStatus.ENCRYPTED.value:
+                    summary.skipped_encrypted += 1
+                elif report.status == ModStatus.ERROR.value:
+                    summary.errors_encountered += 1
+
+                if progress_callback is not None:
+                    progress_callback(zip_path, report, completed_count, total_files)
 
     summary.elapsed_seconds = time.perf_counter() - start_time
     return summary
