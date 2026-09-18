@@ -1,0 +1,1 @@
+"""BeamNG Mod Fixer test suite."""

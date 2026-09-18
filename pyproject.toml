@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "beamng-mod-fixer"
+version = "1.0.0"
+description = "Automatic headlight fixer (lightCastShadows) and graphics optimizer for BeamNG.drive mod vehicles"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "BeamNG Modding Community" }
+]
+keywords = [
+    "beamng", "beamng-drive", "mods", "headlights", "lightCastShadows",
+    "jbeam", "graphics", "fps", "optimizer", "reshade", "pbr"
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Games/Entertainment :: Simulation",
+    "Topic :: Utilities",
+]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.scripts]
+beamng-mod-fixer = "beamng_mod_fixer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
