@@ -178,15 +178,6 @@ def process_mod_archive(
 
     try:
         with zipfile.ZipFile(archive_path, "r") as zf:
-            # Check CRC and central directory integrity
-            bad_crc_file = zf.testzip()
-            if bad_crc_file is not None:
-                report.status = ModStatus.CORRUPT.value
-                report.error_message = (
-                    f"Corrupted ZIP archive: CRC-32 checksum failed for '{bad_crc_file}'"
-                )
-                report.elapsed_seconds = time.perf_counter() - start_time
-                return report
 
             # Check local header CRC vs central directory CRC
             local_bad_crc = _check_local_crc_integrity(zf)
