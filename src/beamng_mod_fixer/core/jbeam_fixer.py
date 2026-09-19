@@ -71,14 +71,32 @@ RE_OBSOLETE_COOKIE_REPLACE = re.compile(
     r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`])art/shapes/lights/[^\"\'`]+([\"\'`])'
 )
 
+# Cookie leading slash normalization: "/art/..." or "/vehicles/..." -> "art/..." or "vehicles/..."
+RE_COOKIE_LEADING_SLASH = re.compile(
+    r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`])/+((?:art|vehicles)/[^\"\'`]+)([\"\'`])'
+)
+
+# Obsolete .png extension for official headlight cookie
+RE_COOKIE_PNG_HEADLIGHT = re.compile(
+    r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`])art/special/bng_light_cookie_headlight\.png([\"\'`])'
+)
+
+# Spotlight zero or non-positive brightness and range
+RE_ZERO_BRIGHTNESS = re.compile(
+    r'(?i)([\"\'\`]?\blightBrightness\b[\"\'\`]?\s*:\s*)(-?0(?:\.0+)?)(?![.\d])'
+)
+RE_ZERO_RANGE = re.compile(
+    r'(?i)([\"\'\`]?\blightRange\b[\"\'\`]?\s*:\s*)(-?0(?:\.0+)?)(?![.\d])'
+)
+
 # Legacy flare names replacement
 RE_LEGACY_FLARES = re.compile(
     r'(?i)([\"\'\`]?\bflareName\b[\"\'\`]?\s*:\s*[\"\'`])(headlightFlare|highbeamFlare|fogFlare)([\"\'`])'
 )
 
-# Misspelled or non-standard electrics signal names in spotlight table rows
+# Misspelled or non-standard electrics signal names in spotlight table rows (preserving valid headlight/lights signals)
 RE_ELECTRICS_ROW = re.compile(
-    r'(?i)(\[\s*[\"\'`])(low_beam|lowBeam|headlights?|low_beams|high_beam|highBeam|high_beams|fog_light|foglight|fog_lights|reverse_light|reverselight)([\"\'`]\s*,)'
+    r'(?i)(\[\s*[\"\'`])(low_beam|lowBeam|low_beams|high_beam|highBeam|high_beams|fog_light|foglight|fog_lights|reverse_light|reverselight)([\"\'`]\s*,)'
 )
 
 
@@ -367,7 +385,7 @@ def normalize_electrics_signals(content: str) -> Tuple[str, int, List[Diagnostic
         name_lower = raw_name.lower()
         suffix = m.group(3)
 
-        if name_lower in ("low_beam", "lowbeam", "headlight", "headlights", "low_beams"):
+        if name_lower in ("low_beam", "lowbeam", "low_beams"):
             target = "lowbeam"
         elif name_lower in ("high_beam", "highbeam", "high_beams"):
             target = "highbeam"
@@ -394,34 +412,40 @@ def normalize_electrics_signals(content: str) -> Tuple[str, int, List[Diagnostic
     return fixed_text, count, diags
 
 
-def ensure_highbeam_shadow_separation(content: str) -> Tuple[str, int, List[DiagnosticNotice]]:
-    """Ensure highbeam lights retain explicit lightCastShadows: true when sharing array with lowbeam."""
+def repair_spotlight_brightness_and_range(content: str) -> Tuple[str, int, List[DiagnosticNotice]]:
+    """Detect and repair zero or non-positive spotlight brightness and range."""
     diags: List[DiagnosticNotice] = []
-    re_direct_transition = re.compile(
-        r'(\[\s*[\"\'`]lowbeam[\"\'`][^\]]*\]\s*,\s*)(\r?\n\s*)(\[\s*[\"\'`]highbeam[\"\'`])',
-        re.IGNORECASE
-    )
+    fixed_text = content
+    repairs = 0
 
-    count = 0
-    def _insert_highbeam_props(m: re.Match) -> str:
-        nonlocal count
-        count += 1
+    def _fix_brightness(m: re.Match) -> str:
+        nonlocal repairs
+        repairs += 1
         diags.append(
             DiagnosticNotice(
                 severity="info",
-                message="Separated highbeam configuration to ensure independent shadow casting (lightCastShadows: true)",
-                rule="highbeam_shadow_separated",
+                message="Repaired non-positive lightBrightness to standard 0.75",
+                rule="spotlight_brightness_repaired",
             )
         )
-        indent = m.group(2)
-        return (
-            f'{m.group(1)}{indent}'
-            f'{{"lightRange": 80, "lightCastShadows": true, "flareName": "{MODERN_HIGHBEAM_FLARE}"}},{indent}'
-            f'{m.group(3)}'
-        )
+        return f"{m.group(1)}0.75"
 
-    fixed_text = re_direct_transition.sub(_insert_highbeam_props, content)
-    return fixed_text, count, diags
+    fixed_text = RE_ZERO_BRIGHTNESS.sub(_fix_brightness, fixed_text)
+
+    def _fix_range(m: re.Match) -> str:
+        nonlocal repairs
+        repairs += 1
+        diags.append(
+            DiagnosticNotice(
+                severity="info",
+                message="Repaired non-positive lightRange to standard 70.0",
+                rule="spotlight_range_repaired",
+            )
+        )
+        return f"{m.group(1)}70.0"
+
+    fixed_text = RE_ZERO_RANGE.sub(_fix_range, fixed_text)
+    return fixed_text, repairs, diags
 
 
 def audit_spotlights(
@@ -633,22 +657,79 @@ def fix_jbeam_content(
         text, ang_count, ang_diags = repair_spotlight_angles(text)
         diagnostics.extend(ang_diags)
 
-    # 3. Modernize obsolete cookie paths (art/shapes/lights/* -> art/special/BNG_light_cookie_headlight.dds)
-    if modernize_cookies and "art/shapes/lights/" in text.lower():
-        def _replace_obsolete_cookie(m: re.Match) -> str:
+    # 3. Repair non-positive brightness and range if requested
+    if repair_angles:
+        text, br_count, br_diags = repair_spotlight_brightness_and_range(text)
+        diagnostics.extend(br_diags)
+
+    # 4. Modernize and repair cookie paths
+    if modernize_cookies and (has_optics or "art/" in text.lower() or "cookie" in text.lower()):
+        # 4a. Obsolete cookie paths (art/shapes/lights/* -> art/special/BNG_light_cookie_headlight.dds)
+        if "art/shapes/lights/" in text.lower():
+            def _replace_obsolete_cookie(m: re.Match) -> str:
+                diagnostics.append(
+                    DiagnosticNotice(
+                        severity="info",
+                        message="Modernized obsolete cookie path to modern Torque3D PBR asset 'art/special/BNG_light_cookie_headlight.dds'",
+                        file_path=filename,
+                        rule="cookie_path_modernized",
+                    )
+                )
+                return f'{m.group(1)}{MODERN_HEADLIGHT_COOKIE}{m.group(2)}'
+
+            text = RE_OBSOLETE_COOKIE_REPLACE.sub(_replace_obsolete_cookie, text)
+
+        # 4b. Remove leading slash from VFS cookies ("/art/..." or "/vehicles/..." -> "art/..." or "vehicles/...")
+        def _strip_cookie_slash(m: re.Match) -> str:
             diagnostics.append(
                 DiagnosticNotice(
                     severity="info",
-                    message="Modernized obsolete cookie path to modern Torque3D PBR asset 'art/special/BNG_light_cookie_headlight.dds'",
+                    message=f"Removed leading slash from cookie path for Torque3D VFS compatibility",
                     file_path=filename,
-                    rule="cookie_path_modernized",
+                    rule="cookie_path_normalized",
                 )
             )
-            return f'{m.group(1)}{MODERN_HEADLIGHT_COOKIE}{m.group(2)}'
+            return f'{m.group(1)}{m.group(2)}{m.group(3)}'
 
-        text = RE_OBSOLETE_COOKIE_REPLACE.sub(_replace_obsolete_cookie, text)
+        text = RE_COOKIE_LEADING_SLASH.sub(_strip_cookie_slash, text)
 
-    # 4. Modernize legacy flare names (headlightFlare -> vehicleHeadLightFlare, etc.)
+        # 4c. Fix non-existent .png headlight cookie to official .dds
+        if "bng_light_cookie_headlight.png" in text.lower():
+            text = RE_COOKIE_PNG_HEADLIGHT.sub(f'\\g<1>{MODERN_HEADLIGHT_COOKIE}\\g<2>', text)
+            diagnostics.append(
+                DiagnosticNotice(
+                    severity="info",
+                    message="Updated cookie texture extension from .png to official .dds 'art/special/BNG_light_cookie_headlight.dds'",
+                    file_path=filename,
+                    rule="cookie_extension_modernized",
+                )
+            )
+
+        # 4d. Fallback missing local vehicle cookies to modern official cookie if archive file set is provided
+        if available_files is not None:
+            normalized_archive = {f.lower().replace("\\", "/") for f in available_files}
+            def _fix_missing_cookie(m: re.Match) -> str:
+                cval = m.group(1).strip()
+                if cval.startswith("$") or cval.lower().startswith("art/special/") or cval.lower().startswith("art/"):
+                    return m.group(0)
+                norm = cval.lower().replace("\\", "/").lstrip("/")
+                if norm and norm not in normalized_archive:
+                    diagnostics.append(
+                        DiagnosticNotice(
+                            severity="info",
+                            message=f"Replaced missing local cookie texture '{cval}' with standard '{MODERN_HEADLIGHT_COOKIE}'",
+                            file_path=filename,
+                            rule="cookie_missing_replaced",
+                        )
+                    )
+                    prefix = m.group(0).split(":")[0]
+                    quote = '"'
+                    return f'{prefix}: {quote}{MODERN_HEADLIGHT_COOKIE}{quote}'
+                return m.group(0)
+
+            text = RE_COOKIE_VALUE.sub(_fix_missing_cookie, text)
+
+    # 5. Modernize legacy flare names (headlightFlare -> vehicleHeadLightFlare, etc.)
     if modernize_flares and any(tok in text.lower() for tok in ("headlightflare", "highbeamflare", "fogflare")):
         def _replace_legacy_flare(m: re.Match) -> str:
             legacy = m.group(2).lower()
@@ -671,7 +752,7 @@ def fix_jbeam_content(
 
         text = RE_LEGACY_FLARES.sub(_replace_legacy_flare, text)
 
-    # 5. Fix lightCastShadows: true -> false (with selective highbeam protection when selective=True)
+    # 6. Fix lightCastShadows: true -> false (with selective highbeam protection when selective=True)
     if has_shadows:
         matches = list(RE_LIGHT_CAST_SHADOWS.finditer(text))
         if matches:
@@ -710,11 +791,6 @@ def fix_jbeam_content(
             if fix_count > 0:
                 pieces.append(text[last_idx:])
                 text = "".join(pieces)
-
-        # In selective mode, if lowbeam was converted and highbeam directly follows without props, separate highbeam
-        if selective and fix_count > 0:
-            text, sep_count, sep_diags = ensure_highbeam_shadow_separation(text)
-            diagnostics.extend(sep_diags)
 
     # 6. Normalize optics if requested
     if normalize_optics and has_optics:

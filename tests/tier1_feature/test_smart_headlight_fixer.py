@@ -1,4 +1,4 @@
-﻿"""Tier 1: Feature Tests for Smart Headlight Fixer.
+"""Tier 1: Feature Tests for Smart Headlight Fixer.
 
 Verifies:
 - Lowbeam lightCastShadows: true -> false (prevents front bumper self-shadow culling)
@@ -152,3 +152,75 @@ def test_zip_processor_smart_mode(tmp_path):
         fixed_jbeam = zf.read("vehicles/coupe/coupe_lights.jbeam").decode("utf-8")
         assert '"flareName": "vehicleHeadLightFlare", "lightCastShadows": false' in fixed_jbeam
         assert '"flareName": "vehicleHighBeamFlare", "lightCastShadows": true' in fixed_jbeam
+
+
+def test_smart_headlight_removes_cookie_leading_slash():
+    jbeam = '''{
+        "spotlights": [
+            {"cookieName": "/art/special/BNG_light_cookie_headlight.dds", "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]]
+        ]
+    }'''
+    fixed, count, diags = smart_fix_jbeam_content(jbeam)
+    assert '"art/special/BNG_light_cookie_headlight.dds"' in fixed
+    assert '"/art/' not in fixed
+    assert any(d.rule == "cookie_path_normalized" for d in diags)
+
+
+def test_smart_headlight_fixes_cookie_png_extension():
+    jbeam = '''{
+        "spotlights": [
+            {"cookieName": "art/special/BNG_light_cookie_headlight.png", "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]]
+        ]
+    }'''
+    fixed, count, diags = smart_fix_jbeam_content(jbeam)
+    assert MODERN_HEADLIGHT_COOKIE in fixed
+    assert ".png" not in fixed
+    assert any(d.rule == "cookie_extension_modernized" for d in diags)
+
+
+def test_smart_headlight_replaces_missing_local_cookie():
+    jbeam = '''{
+        "spotlights": [
+            {"cookieName": "vehicles/custom_car/textures/missing_cookie.dds", "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]]
+        ]
+    }'''
+    available_files = {"vehicles/custom_car/car.jbeam", "vehicles/custom_car/car.dae"}
+    fixed, count, diags = smart_fix_jbeam_content(jbeam, available_files=available_files)
+    assert MODERN_HEADLIGHT_COOKIE in fixed
+    assert "missing_cookie.dds" not in fixed
+    assert any(d.rule == "cookie_missing_replaced" for d in diags)
+
+
+def test_smart_headlight_repairs_zero_brightness_and_range():
+    jbeam = '''{
+        "spotlights": [
+            {"lightBrightness": 0, "lightRange": 0.0, "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]]
+        ]
+    }'''
+    fixed, count, diags = smart_fix_jbeam_content(jbeam)
+    assert '"lightBrightness": 0.75' in fixed
+    assert '"lightRange": 70.0' in fixed
+    assert any(d.rule == "spotlight_brightness_repaired" for d in diags)
+    assert any(d.rule == "spotlight_range_repaired" for d in diags)
+
+
+def test_smart_headlight_does_not_inject_props_between_rows():
+    """Verify that props arrays with lowbeam and highbeam meshes are NOT corrupted."""
+    jbeam = '''{
+        "props": [
+            ["func", "mesh", "idRef:", "idX:", "idY:"],
+            ["lowbeam", "headlight_mesh_L", "ref", "x", "y"],
+            ["highbeam", "highbeam_mesh_L", "ref", "x", "y"]
+        ]
+    }'''
+    fixed, count, diags = smart_fix_jbeam_content(jbeam)
+    # The structure must NOT have an artificial dict injected between lowbeam and highbeam
+    assert '["lowbeam", "headlight_mesh_L"' in fixed
+    assert '["highbeam", "highbeam_mesh_L"' in fixed
+    assert "vehicleHighBeamFlare" not in fixed
+    assert "lightRange" not in fixed
+
