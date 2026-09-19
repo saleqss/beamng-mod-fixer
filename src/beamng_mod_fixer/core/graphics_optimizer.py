@@ -101,8 +101,8 @@ OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
                 "enabled": True,
             },
             "Reflect": {
-                "maxLights": 4,
-                "deferredLighting": False,
+                "maxLights": 32,
+                "deferredLighting": True,
                 "depthPrepass": True,
             },
         },

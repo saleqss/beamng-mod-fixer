@@ -16,6 +16,7 @@ from beamng_mod_fixer.core.jbeam_fixer import (
     encode_jbeam_str,
     fix_jbeam_content,
     patch_jbeam_text,
+    smart_fix_jbeam_content,
 )
 from beamng_mod_fixer.exceptions import (
     ArchiveCorruptedError,
@@ -56,6 +57,7 @@ __all__ = [
     "__author__",
     # Core Fixer APIs
     "fix_jbeam_content",
+    "smart_fix_jbeam_content",
     "patch_jbeam_text",
     "detect_light_cast_shadows",
     "audit_spotlights",

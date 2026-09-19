@@ -41,6 +41,7 @@ dev = [
 ]
 
 [project.scripts]
+agy-beam = "beamng_mod_fixer.cli:main"
 beamng-mod-fixer = "beamng_mod_fixer.cli:main"
 
 [tool.setuptools.packages.find]

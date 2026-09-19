@@ -60,6 +60,27 @@ RE_OUTER_ANGLE = re.compile(
     r'(?i)[\"\'\`]?\blightOuterAngle\b[\"\'\`]?\s*:\s*(-?\d+(?:\.\d+)?)'
 )
 
+# Modern official BeamNG headlight assets (Torque3D PBR Clustered Forward+)
+MODERN_HEADLIGHT_COOKIE = "art/special/BNG_light_cookie_headlight.dds"
+MODERN_HEADLIGHT_FLARE = "vehicleHeadLightFlare"
+MODERN_HIGHBEAM_FLARE = "vehicleHighBeamFlare"
+MODERN_FOG_FLARE = "vehicleFogLightFlare"
+
+# Obsolete cookie path replacement (pre-PBR art/shapes/lights/* -> art/special/*)
+RE_OBSOLETE_COOKIE_REPLACE = re.compile(
+    r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`])art/shapes/lights/[^\"\'`]+([\"\'`])'
+)
+
+# Legacy flare names replacement
+RE_LEGACY_FLARES = re.compile(
+    r'(?i)([\"\'\`]?\bflareName\b[\"\'\`]?\s*:\s*[\"\'`])(headlightFlare|highbeamFlare|fogFlare)([\"\'`])'
+)
+
+# Misspelled or non-standard electrics signal names in spotlight table rows
+RE_ELECTRICS_ROW = re.compile(
+    r'(?i)(\[\s*[\"\'`])(low_beam|lowBeam|headlights?|low_beams|high_beam|highBeam|high_beams|fog_light|foglight|fog_lights|reverse_light|reverselight)([\"\'`]\s*,)'
+)
+
 
 # ==============================================================================
 # Encoding Handler Functions
@@ -217,6 +238,192 @@ def detect_light_cast_shadows(content: str) -> bool:
     return False
 
 
+def _is_highbeam_context(text: str, pos: int) -> bool:
+    """Determine whether a lightCastShadows property instance belongs to a highbeam light.
+
+    In modern BeamNG (0.28+ / 0.30+ Clustered Forward+ PBR), highbeams MUST retain
+    lightCastShadows: true to avoid severe light bleeding through the dashboard/interior
+    into the driver cockpit and to maintain environmental dynamic shadows.
+    """
+    line_start = text.rfind("\n", 0, pos) + 1
+    line_end = text.find("\n", pos)
+    if line_end == -1:
+        line_end = len(text)
+    line_content = text[line_start:line_end].lower()
+
+    if any(tok in line_content for tok in ("highbeam", "high_beam", "high_beams")):
+        return True
+
+    dict_start = text.rfind("{", 0, pos)
+    if dict_start != -1:
+        depth = 0
+        dict_end = len(text)
+        for idx in range(dict_start, min(len(text), dict_start + 1500)):
+            if text[idx] == "{":
+                depth += 1
+            elif text[idx] == "}":
+                depth -= 1
+                if depth == 0:
+                    dict_end = idx + 1
+                    break
+        dict_body = text[dict_start:dict_end].lower()
+        if "highbeam" in dict_body or "high_beam" in dict_body or "vehiclehighbeamflare" in dict_body:
+            return True
+
+        prefix_block = text[max(0, dict_start - 250):dict_start].lower()
+        last_bracket = prefix_block.rfind("[")
+        if last_bracket != -1:
+            row_prefix = prefix_block[last_bracket:]
+            if any(tok in row_prefix for tok in ("highbeam", "high_beam", "high_beams")):
+                return True
+
+        after_dict = text[dict_end:min(len(text), dict_end + 1000)]
+        next_brace = after_dict.find("{")
+        valid_after = after_dict[:next_brace] if next_brace != -1 else after_dict
+        valid_after_lower = valid_after.lower()
+
+        has_hb = any(tok in valid_after_lower for tok in ("\"highbeam", "'highbeam", "`highbeam", "highbeam_"))
+        has_lb = any(tok in valid_after_lower for tok in ("\"lowbeam", "'lowbeam", "`lowbeam", "lowbeam_", "headlight"))
+        if has_hb and not has_lb:
+            return True
+
+    return False
+
+
+def repair_spotlight_angles(content: str) -> Tuple[str, int, List[DiagnosticNotice]]:
+    """Detect and repair inverted or invalid spotlight angles (innerAngle > outerAngle).
+
+    In Torque3D spotlight math, when innerAngle > outerAngle, the cosine falloff division
+    results in negative or zero light intensity, completely extinguishing the spotlight.
+    """
+    diags: List[DiagnosticNotice] = []
+    fixed_text = content
+    repairs = 0
+
+    re_angle_pair = re.compile(
+        r'(?i)([\"\'\`]?lightInnerAngle[\"\'\`]?\s*:\s*)(-?\d+(?:\.\d+)?)([\s\S]{1,300}?)([\"\'\`]?lightOuterAngle[\"\'\`]?\s*:\s*)(-?\d+(?:\.\d+)?)'
+    )
+    re_reverse_pair = re.compile(
+        r'(?i)([\"\'\`]?lightOuterAngle[\"\'\`]?\s*:\s*)(-?\d+(?:\.\d+)?)([\s\S]{1,300}?)([\"\'\`]?lightInnerAngle[\"\'\`]?\s*:\s*)(-?\d+(?:\.\d+)?)'
+    )
+
+    def _fix_pair(m: re.Match) -> str:
+        nonlocal repairs
+        inner_val = float(m.group(2))
+        outer_val = float(m.group(5))
+        if inner_val > outer_val or outer_val <= 0:
+            repairs += 1
+            new_inner = min(inner_val, outer_val)
+            new_outer = max(inner_val, outer_val)
+            if new_outer <= 0:
+                new_inner = 40.0
+                new_outer = 65.0
+            diags.append(
+                DiagnosticNotice(
+                    severity="info",
+                    message=f"Repaired inverted spotlight angles from inner={inner_val}, outer={outer_val} to inner={new_inner}, outer={new_outer}",
+                    rule="spotlight_angle_repaired",
+                )
+            )
+            return f"{m.group(1)}{new_inner}{m.group(3)}{m.group(4)}{new_outer}"
+        return m.group(0)
+
+    fixed_text = re_angle_pair.sub(_fix_pair, fixed_text)
+
+    def _fix_rev_pair(m: re.Match) -> str:
+        nonlocal repairs
+        outer_val = float(m.group(2))
+        inner_val = float(m.group(5))
+        if inner_val > outer_val or outer_val <= 0:
+            repairs += 1
+            new_inner = min(inner_val, outer_val)
+            new_outer = max(inner_val, outer_val)
+            if new_outer <= 0:
+                new_inner = 40.0
+                new_outer = 65.0
+            diags.append(
+                DiagnosticNotice(
+                    severity="info",
+                    message=f"Repaired inverted spotlight angles from inner={inner_val}, outer={outer_val} to inner={new_inner}, outer={new_outer}",
+                    rule="spotlight_angle_repaired",
+                )
+            )
+            return f"{m.group(1)}{new_outer}{m.group(3)}{m.group(4)}{new_inner}"
+        return m.group(0)
+
+    fixed_text = re_reverse_pair.sub(_fix_rev_pair, fixed_text)
+    return fixed_text, repairs, diags
+
+
+def normalize_electrics_signals(content: str) -> Tuple[str, int, List[DiagnosticNotice]]:
+    """Normalize misspelled or non-standard electrics signal names in spotlight table rows."""
+    diags: List[DiagnosticNotice] = []
+    count = 0
+
+    def _replace_electrics(m: re.Match) -> str:
+        nonlocal count
+        prefix = m.group(1)
+        raw_name = m.group(2)
+        name_lower = raw_name.lower()
+        suffix = m.group(3)
+
+        if name_lower in ("low_beam", "lowbeam", "headlight", "headlights", "low_beams"):
+            target = "lowbeam"
+        elif name_lower in ("high_beam", "highbeam", "high_beams"):
+            target = "highbeam"
+        elif name_lower in ("fog_light", "foglight", "fog_lights"):
+            target = "fog"
+        elif name_lower in ("reverse_light", "reverselight"):
+            target = "reverse"
+        else:
+            return m.group(0)
+
+        if raw_name != target:
+            count += 1
+            diags.append(
+                DiagnosticNotice(
+                    severity="info",
+                    message=f"Normalized electrics signal '{raw_name}' to '{target}' in spotlight row",
+                    rule="electrics_signal_normalized",
+                )
+            )
+            return f"{prefix}{target}{suffix}"
+        return m.group(0)
+
+    fixed_text = RE_ELECTRICS_ROW.sub(_replace_electrics, content)
+    return fixed_text, count, diags
+
+
+def ensure_highbeam_shadow_separation(content: str) -> Tuple[str, int, List[DiagnosticNotice]]:
+    """Ensure highbeam lights retain explicit lightCastShadows: true when sharing array with lowbeam."""
+    diags: List[DiagnosticNotice] = []
+    re_direct_transition = re.compile(
+        r'(\[\s*[\"\'`]lowbeam[\"\'`][^\]]*\]\s*,\s*)(\r?\n\s*)(\[\s*[\"\'`]highbeam[\"\'`])',
+        re.IGNORECASE
+    )
+
+    count = 0
+    def _insert_highbeam_props(m: re.Match) -> str:
+        nonlocal count
+        count += 1
+        diags.append(
+            DiagnosticNotice(
+                severity="info",
+                message="Separated highbeam configuration to ensure independent shadow casting (lightCastShadows: true)",
+                rule="highbeam_shadow_separated",
+            )
+        )
+        indent = m.group(2)
+        return (
+            f'{m.group(1)}{indent}'
+            f'{{"lightRange": 80, "lightCastShadows": true, "flareName": "{MODERN_HIGHBEAM_FLARE}"}},{indent}'
+            f'{m.group(3)}'
+        )
+
+    fixed_text = re_direct_transition.sub(_insert_highbeam_props, content)
+    return fixed_text, count, diags
+
+
 def audit_spotlights(
     content: str,
     filename: str = "",
@@ -367,21 +574,33 @@ def fix_jbeam_content(
     content: str,
     filename: str = "",
     available_files: Optional[Set[str]] = None,
-    normalize_optics: bool = True
+    normalize_optics: bool = True,
+    selective: bool = False,
+    modernize_cookies: bool = True,
+    modernize_flares: bool = True,
+    normalize_electrics: bool = True,
+    repair_angles: bool = True,
 ) -> Tuple[str, int, List[DiagnosticNotice]]:
     """Fix broken headlight self-shadow occlusion and normalize optics in JBeam text.
 
-    Replaces `lightCastShadows: true` with `false` using a robust, comment-preserving
-    regular expression that retains exact quotation, indentation, spacing, inline
-    comments, and trailing commas.
+    Replaces `lightCastShadows: true` with `false` (with highbeam preservation when
+    `selective=True`) using a robust, comment-preserving regular expression that
+    retains exact quotation, indentation, spacing, inline comments, and trailing commas.
 
-    Also runs optics diagnostics and normalizes invalid `flareName` and `cookieName`.
+    Also modernizes obsolete cookie paths, legacy flares, corrects electrics signals,
+    repairs inverted spotlight angles, and normalizes invalid optics assets.
 
     Args:
         content: Raw JBeam text content.
         filename: Optional filename for diagnostic reporting.
         available_files: Optional set of filenames in the mod archive to check texture links.
-        normalize_optics: If True, normalizes invalid flareName/cookieName ('none' -> '').
+        normalize_optics: If True, normalizes invalid flareName/cookieName.
+        selective: If True, selectively fixes lowbeams and fog lights while preserving
+                   highbeam shadow casting (lightCastShadows: true) to prevent cockpit bleed.
+        modernize_cookies: If True, updates pre-PBR art/shapes/lights/* to modern cookies.
+        modernize_flares: If True, updates legacy flare names to modern vehicle flares.
+        normalize_electrics: If True, corrects non-standard electrics signal names.
+        repair_angles: If True, fixes inverted or negative spotlight angles.
 
     Returns:
         Tuple[str, int, List[DiagnosticNotice]]:
@@ -396,12 +615,63 @@ def fix_jbeam_content(
     # Fast bypass if no relevant tokens exist in the text
     has_shadows = FAST_SHADOW_CHECK in content_lower
     has_optics = any(tok in content_lower for tok in ("flarename", "cookiename", "spotlights"))
+    has_electrics = any(tok in content_lower for tok in ("low_beam", "high_beam", "fog_light", "headlight"))
+    has_angles = "lightinnerangle" in content_lower and "lightouterangle" in content_lower
 
-    if not has_shadows and not has_optics:
+    if not has_shadows and not has_optics and not has_electrics and not has_angles:
         return content, 0, diagnostics
 
-    # 1. Replace lightCastShadows: true -> false
     fix_count = 0
+
+    # 1. Normalize electrics signals in spotlight rows if requested
+    if normalize_electrics and (selective or has_electrics):
+        text, el_count, el_diags = normalize_electrics_signals(text)
+        diagnostics.extend(el_diags)
+
+    # 2. Repair inverted spotlight angles if requested
+    if repair_angles and (selective or has_angles):
+        text, ang_count, ang_diags = repair_spotlight_angles(text)
+        diagnostics.extend(ang_diags)
+
+    # 3. Modernize obsolete cookie paths (art/shapes/lights/* -> art/special/BNG_light_cookie_headlight.dds)
+    if modernize_cookies and "art/shapes/lights/" in text.lower():
+        def _replace_obsolete_cookie(m: re.Match) -> str:
+            diagnostics.append(
+                DiagnosticNotice(
+                    severity="info",
+                    message="Modernized obsolete cookie path to modern Torque3D PBR asset 'art/special/BNG_light_cookie_headlight.dds'",
+                    file_path=filename,
+                    rule="cookie_path_modernized",
+                )
+            )
+            return f'{m.group(1)}{MODERN_HEADLIGHT_COOKIE}{m.group(2)}'
+
+        text = RE_OBSOLETE_COOKIE_REPLACE.sub(_replace_obsolete_cookie, text)
+
+    # 4. Modernize legacy flare names (headlightFlare -> vehicleHeadLightFlare, etc.)
+    if modernize_flares and any(tok in text.lower() for tok in ("headlightflare", "highbeamflare", "fogflare")):
+        def _replace_legacy_flare(m: re.Match) -> str:
+            legacy = m.group(2).lower()
+            if "high" in legacy:
+                new_flare = MODERN_HIGHBEAM_FLARE
+            elif "fog" in legacy:
+                new_flare = MODERN_FOG_FLARE
+            else:
+                new_flare = MODERN_HEADLIGHT_FLARE
+
+            diagnostics.append(
+                DiagnosticNotice(
+                    severity="info",
+                    message=f"Modernized legacy flare '{m.group(2)}' to '{new_flare}'",
+                    file_path=filename,
+                    rule="flare_legacy_modernized",
+                )
+            )
+            return f'{m.group(1)}{new_flare}{m.group(3)}'
+
+        text = RE_LEGACY_FLARES.sub(_replace_legacy_flare, text)
+
+    # 5. Fix lightCastShadows: true -> false (with selective highbeam protection when selective=True)
     if has_shadows:
         matches = list(RE_LIGHT_CAST_SHADOWS.finditer(text))
         if matches:
@@ -410,60 +680,114 @@ def fix_jbeam_content(
             for m in matches:
                 if _is_inside_string_literal(text, m.start()):
                     continue
+
+                if selective and _is_highbeam_context(text, m.start()):
+                    diagnostics.append(
+                        DiagnosticNotice(
+                            severity="info",
+                            message="Preserved highbeam lightCastShadows: true to maintain environmental shadows and prevent cockpit bleed",
+                            file_path=filename,
+                            rule="highbeam_shadow_preserved",
+                        )
+                    )
+                    continue
+
                 pieces.append(text[last_idx:m.start()])
                 pieces.append(m.group(1))
                 pieces.append("false")
                 last_idx = m.end()
                 fix_count += 1
+                if selective:
+                    diagnostics.append(
+                        DiagnosticNotice(
+                            severity="info",
+                            message="Fixed lowbeam self-shadow occlusion (lightCastShadows: false)",
+                            file_path=filename,
+                            rule="lowbeam_shadow_fixed",
+                        )
+                    )
+
             if fix_count > 0:
                 pieces.append(text[last_idx:])
                 text = "".join(pieces)
 
-    # 2. Normalize optics if requested
+        # In selective mode, if lowbeam was converted and highbeam directly follows without props, separate highbeam
+        if selective and fix_count > 0:
+            text, sep_count, sep_diags = ensure_highbeam_shadow_separation(text)
+            diagnostics.extend(sep_diags)
+
+    # 6. Normalize optics if requested
     if normalize_optics and has_optics:
-        # Normalize invalid flareName ('none', 'null', 'undefined' -> "")
+        # Normalize invalid flareName ('none', 'null', 'undefined')
         def _replace_flare(m: re.Match) -> str:
             val = m.group(0).split(":")[-1].strip().strip("\"'`")
-            diagnostics.append(
-                DiagnosticNotice(
-                    severity="warning",
-                    message=f'Normalized invalid flareName "{val}" to empty string ""',
-                    file_path=filename,
-                    rule="flare_name_normalized",
+            if selective:
+                replacement = f'"{MODERN_HEADLIGHT_FLARE}"'
+                diagnostics.append(
+                    DiagnosticNotice(
+                        severity="info",
+                        message=f'Restored valid headlight flare "{MODERN_HEADLIGHT_FLARE}" in place of invalid flareName "{val}"',
+                        file_path=filename,
+                        rule="flare_name_restored",
+                    )
                 )
-            )
-            return f'{m.group(1)}""'
+            else:
+                replacement = '""'
+                diagnostics.append(
+                    DiagnosticNotice(
+                        severity="warning",
+                        message=f'Normalized invalid flareName "{val}" to empty string ""',
+                        file_path=filename,
+                        rule="flare_name_normalized",
+                    )
+                )
+            return f'{m.group(1)}{replacement}'
 
         text = RE_INVALID_FLARE.sub(_replace_flare, text)
 
-        # Normalize invalid cookieName ('none', 'null', 'undefined' -> "")
+        # Normalize invalid cookieName ('none', 'null', 'undefined')
         def _replace_cookie(m: re.Match) -> str:
             val = m.group(0).split(":")[-1].strip().strip("\"'`")
-            diagnostics.append(
-                DiagnosticNotice(
-                    severity="info",
-                    message=f'Normalized invalid cookieName "{val}" to empty string ""',
-                    file_path=filename,
-                    rule="cookie_name_normalized",
+            if selective:
+                replacement = f'"{MODERN_HEADLIGHT_COOKIE}"'
+                diagnostics.append(
+                    DiagnosticNotice(
+                        severity="info",
+                        message=f'Restored valid headlight cookie "{MODERN_HEADLIGHT_COOKIE}" in place of invalid cookieName "{val}"',
+                        file_path=filename,
+                        rule="cookie_name_restored",
+                    )
                 )
-            )
-            return f'{m.group(1)}""'
+            else:
+                replacement = '""'
+                diagnostics.append(
+                    DiagnosticNotice(
+                        severity="info",
+                        message=f'Normalized invalid cookieName "{val}" to empty string ""',
+                        file_path=filename,
+                        rule="cookie_name_normalized",
+                    )
+                )
+            return f'{m.group(1)}{replacement}'
 
         text = RE_INVALID_COOKIE.sub(_replace_cookie, text)
 
-    # 3. Collect non-destructive optics diagnostics
+    # 7. Collect non-destructive optics diagnostics
     if has_optics:
         additional_diag = audit_spotlights(
             text,
             filename=filename,
             available_files=available_files
         )
-        # Avoid duplicate diagnostics if already recorded during normalization
         existing_rules = {d.rule for d in diagnostics}
         for d in additional_diag:
-            if d.rule == "flare_name_invalid" and "flare_name_normalized" in existing_rules:
+            if d.rule == "flare_name_invalid" and ("flare_name_normalized" in existing_rules or "flare_name_restored" in existing_rules):
                 continue
-            if d.rule == "cookie_name_invalid" and "cookie_name_normalized" in existing_rules:
+            if d.rule == "cookie_name_invalid" and ("cookie_name_normalized" in existing_rules or "cookie_name_restored" in existing_rules):
+                continue
+            if d.rule == "cookie_path_obsolete" and "cookie_path_modernized" in existing_rules:
+                continue
+            if d.rule == "spotlight_angle_inverted" and "spotlight_angle_repaired" in existing_rules:
                 continue
             diagnostics.append(d)
 
@@ -474,11 +798,42 @@ def fix_jbeam_content(
     return text, fix_count, diagnostics
 
 
-def patch_jbeam_text(content: str) -> Tuple[str, int]:
+def smart_fix_jbeam_content(
+    content: str,
+    filename: str = "",
+    available_files: Optional[Set[str]] = None,
+) -> Tuple[str, int, List[DiagnosticNotice]]:
+    """Intelligently fix BeamNG JBeam vehicle optics with 100% precision.
+
+    - Selectively fixes lowbeam self-shadow occlusion (lightCastShadows: false).
+    - Preserves highbeam shadow casting (lightCastShadows: true) to prevent cockpit bleed.
+    - Modernizes obsolete cookie paths (art/shapes/lights/* -> art/special/BNG_light_cookie_headlight.dds).
+    - Modernizes legacy flares (headlightFlare -> vehicleHeadLightFlare).
+    - Corrects misspelled electrics signals in spotlight rows (low_beam -> lowbeam).
+    - Repairs inverted spotlight cone angles (innerAngle > outerAngle).
+    """
+    return fix_jbeam_content(
+        content=content,
+        filename=filename,
+        available_files=available_files,
+        normalize_optics=True,
+        selective=True,
+        modernize_cookies=True,
+        modernize_flares=True,
+        normalize_electrics=True,
+        repair_angles=True,
+    )
+
+
+def patch_jbeam_text(content: str, selective: bool = False) -> Tuple[str, int]:
     """Convenience helper to patch lightCastShadows in JBeam text without diagnostics.
+
+    Args:
+        content: Raw JBeam text content.
+        selective: If True, selectively preserves highbeam shadows. Defaults to False.
 
     Returns:
         Tuple[str, int]: (patched_text, fix_count)
     """
-    fixed_text, fix_count, _ = fix_jbeam_content(content, normalize_optics=False)
+    fixed_text, fix_count, _ = fix_jbeam_content(content, normalize_optics=False, selective=selective)
     return fixed_text, fix_count

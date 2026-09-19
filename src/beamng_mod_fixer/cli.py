@@ -102,6 +102,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Graphics optimization preset (default: %(default)s).",
     )
     options_group.add_argument(
+        "--mode",
+        choices=["smart", "legacy"],
+        default="smart",
+        help="Fixing mode: 'smart' selectively fixes lowbeams and modernizes cookies/flares while preserving highbeam shadows; 'legacy' forces lightCastShadows: false everywhere (default: %(default)s).",
+    )
+    options_group.add_argument(
         "--dry-run",
         action="store_true",
         help="Simulate actions and output metrics without modifying files on disk.",
@@ -152,6 +158,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     run_mods = args.fix_mods or args.all
     run_graphics = args.optimize_graphics or args.all
     run_cache = args.clean_cache or args.all
+    selective_fix = (args.mode == "smart")
 
     # If no specific action was requested and running interactively, ask or default to --all
     if not (run_mods or run_graphics or run_cache):
@@ -159,21 +166,27 @@ def main(argv: Optional[List[str]] = None) -> int:
             detected = detect_beamng_user_dir()
             print(f"Detected BeamNG User Directory: {detected or 'Not found (using defaults)'}")
             print("\nSelect an action to perform:")
-            print("  1) Fix broken headlights in all mods (recommended)")
-            print("  2) Optimize graphics settings (high FPS + crisp visuals)")
-            print("  3) Clean shader and texture cache")
-            print("  4) Perform ALL actions (Fix mods + Optimize + Clean cache)")
-            print("  5) Exit")
+            print("  1) Smart Fix: Fix broken headlights selectively (recommended — preserves highbeams & modernizes cookies)")
+            print("  2) Legacy Fix: Convert all lightCastShadows to false everywhere")
+            print("  3) Optimize graphics settings (high FPS + crisp visuals)")
+            print("  4) Clean shader and texture cache")
+            print("  5) Perform ALL actions (Smart Fix + Optimize + Clean cache)")
+            print("  6) Exit")
             try:
-                choice = input("\nEnter choice [1-5] (default: 4): ").strip()
+                choice = input("\nEnter choice [1-6] (default: 5): ").strip()
                 if choice == "1":
                     run_mods = True
+                    selective_fix = True
                 elif choice == "2":
-                    run_graphics = True
-                elif choice == "3":
-                    run_cache = True
-                elif choice in ("4", ""):
                     run_mods = True
+                    selective_fix = False
+                elif choice == "3":
+                    run_graphics = True
+                elif choice == "4":
+                    run_cache = True
+                elif choice in ("5", ""):
+                    run_mods = True
+                    selective_fix = True
                     run_graphics = True
                     run_cache = True
                 else:
@@ -183,22 +196,25 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print("\nAborted by user.")
                 return 0
         else:
-            # Non-interactive without action flags: default to all
+            # Non-interactive without action flags: default to all with smart mode
             run_mods = True
             run_graphics = True
             run_cache = True
+            selective_fix = True
 
     dry_run_tag = " [DRY RUN]" if args.dry_run else ""
     success = True
 
     # Action 1: Fix mods
     if run_mods:
+        mode_tag = " (smart selective)" if selective_fix else " (legacy)"
         if not args.quiet:
-            print(f"\n[*] Scanning and fixing mods in: {mods_dir}{dry_run_tag}")
+            print(f"\n[*] Scanning and fixing mods in: {mods_dir}{mode_tag}{dry_run_tag}")
         try:
             summary = scan_and_fix_mods(
                 mods_dir,
                 dry_run=args.dry_run,
+                selective=selective_fix,
                 progress_callback=(
                     None
                     if args.quiet

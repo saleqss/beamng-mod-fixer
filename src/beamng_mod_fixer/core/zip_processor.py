@@ -106,6 +106,7 @@ def process_mod_archive(
     archive_path: Path,
     dry_run: bool = False,
     enable_diagnostics: bool = True,
+    selective: bool = False,
 ) -> ModArchiveReport:
     """Process an individual BeamNG mod archive, fixing broken headlights in .jbeam files.
 
@@ -113,13 +114,14 @@ def process_mod_archive(
     1. Validation of existence, non-zero size, and header integrity.
     2. Detection of password protection / encryption.
     3. Detection of file locks (in use by BeamNG.drive or other process).
-    4. Safe extraction and JBeam patching of lightCastShadows.
+    4. Safe extraction and JBeam patching of lightCastShadows and optics assets.
     5. Atomic in-place replacement via temporary file swap if modified and not dry_run.
 
     Args:
         archive_path: Path to the .zip mod archive.
         dry_run: If True, preview fixes without modifying files on disk.
         enable_diagnostics: If True, gather detailed diagnostic notices.
+        selective: If True, uses smart selective fixing to protect highbeams and modernize cookies.
 
     Returns:
         ModArchiveReport with status, metrics, and diagnostics.
@@ -190,6 +192,7 @@ def process_mod_archive(
                 return report
 
             entries = zf.infolist()
+            available_filenames = {e.filename for e in entries}
             for entry in entries:
                 if entry.filename.lower().endswith(".jbeam") and not entry.is_dir():
                     report.jbeams_inspected += 1
@@ -197,7 +200,10 @@ def process_mod_archive(
                         raw_data = zf.read(entry.filename)
                         text, encoding = decode_jbeam_bytes(raw_data)
                         fixed_text, fix_count, diags = fix_jbeam_content(
-                            text, filename=entry.filename
+                            text,
+                            filename=entry.filename,
+                            available_files=available_filenames,
+                            selective=selective,
                         )
 
                         is_modified = fix_count > 0 or fixed_text != text
@@ -260,11 +266,13 @@ def process_mod_archive(
             ) as dst_zf:
                 for entry in src_zf.infolist():
                     if entry.filename in modified_jbeams:
-                        # Write patched JBeam data preserving metadata
+                        # Write patched JBeam data preserving metadata and UTF-8 flag
                         new_data = modified_jbeams[entry.filename]
                         new_info = zipfile.ZipInfo(
                             entry.filename, date_time=entry.date_time
                         )
+                        new_info.create_system = entry.create_system
+                        new_info.flag_bits = entry.flag_bits
                         new_info.compress_type = entry.compress_type
                         new_info.comment = entry.comment
                         new_info.external_attr = entry.external_attr
@@ -324,6 +332,7 @@ def scan_and_fix_mods(
     dry_run: bool = False,
     progress_callback: Optional[Callable[[Path, ModArchiveReport, int, int], None]] = None,
     max_workers: Optional[int] = None,
+    selective: bool = False,
 ) -> OverallSummary:
     """Scan a directory for BeamNG mod ZIP archives and fix broken headlights.
 
@@ -333,6 +342,7 @@ def scan_and_fix_mods(
         progress_callback: Optional callback invoked after each archive is processed.
                            Signature: callback(path, report, index, total_count)
         max_workers: Maximum number of worker threads for parallel archive processing.
+        selective: If True, uses smart selective fixing to protect highbeams and modernize cookies.
 
     Returns:
         OverallSummary with aggregated counts across all scanned archives.
@@ -358,7 +368,7 @@ def scan_and_fix_mods(
 
     if dry_run or total_files <= 1 or max_workers <= 1:
         for idx, zip_path in enumerate(zip_files, start=1):
-            report = process_mod_archive(zip_path, dry_run=dry_run)
+            report = process_mod_archive(zip_path, dry_run=dry_run, selective=selective)
             summary.total_scanned += 1
             summary.jbeams_inspected += report.jbeams_inspected
             summary.jbeams_fixed += report.jbeams_modified
@@ -386,7 +396,7 @@ def scan_and_fix_mods(
         completed_count = 0
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_zip = {
-                executor.submit(process_mod_archive, zp, dry_run=False): zp
+                executor.submit(process_mod_archive, zp, dry_run=False, selective=selective): zp
                 for zp in zip_files
             }
             for future in as_completed(future_to_zip):
