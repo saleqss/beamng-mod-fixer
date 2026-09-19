@@ -430,33 +430,36 @@ def repair_spotlight_brightness_and_range(content: str) -> Tuple[str, int, List[
     fixed_text = content
     repairs = 0
 
-    def _fix_brightness(m: re.Match) -> str:
-        nonlocal repairs
-        repairs += 1
-        diags.append(
-            DiagnosticNotice(
-                severity="info",
-                message="Repaired non-positive lightBrightness to standard 0.75",
-                rule="spotlight_brightness_repaired",
+    if "lightbrightness" in content.lower():
+        def _fix_brightness(m: re.Match) -> str:
+            nonlocal repairs
+            repairs += 1
+            diags.append(
+                DiagnosticNotice(
+                    severity="info",
+                    message="Repaired non-positive lightBrightness to standard 0.75",
+                    rule="spotlight_brightness_repaired",
+                )
             )
-        )
-        return f"{m.group(1)}0.75"
+            return f"{m.group(1)}0.75"
 
-    fixed_text = RE_ZERO_BRIGHTNESS.sub(_fix_brightness, fixed_text)
+        fixed_text = RE_ZERO_BRIGHTNESS.sub(_fix_brightness, fixed_text)
 
-    def _fix_range(m: re.Match) -> str:
-        nonlocal repairs
-        repairs += 1
-        diags.append(
-            DiagnosticNotice(
-                severity="info",
-                message="Repaired non-positive lightRange to standard 70.0",
-                rule="spotlight_range_repaired",
+    if "lightrange" in content.lower():
+        def _fix_range(m: re.Match) -> str:
+            nonlocal repairs
+            repairs += 1
+            diags.append(
+                DiagnosticNotice(
+                    severity="info",
+                    message="Repaired non-positive lightRange to standard 70.0",
+                    rule="spotlight_range_repaired",
+                )
             )
-        )
-        return f"{m.group(1)}70.0"
+            return f"{m.group(1)}70.0"
 
-    fixed_text = RE_ZERO_RANGE.sub(_fix_range, fixed_text)
+        fixed_text = RE_ZERO_RANGE.sub(_fix_range, fixed_text)
+
     return fixed_text, repairs, diags
 
 
@@ -534,32 +537,33 @@ def audit_spotlights(
                 )
 
     # 4. Check for inverted or invalid spotlight angles
-    inner_matches = list(RE_INNER_ANGLE.finditer(content))
-    outer_matches = list(RE_OUTER_ANGLE.finditer(content))
-    for im, om in zip(inner_matches, outer_matches):
-        try:
-            inner_val = float(im.group(1))
-            outer_val = float(om.group(1))
-            if inner_val < 0 or outer_val < 0:
-                diagnostics.append(
-                    DiagnosticNotice(
-                        severity="warning",
-                        message=f"Negative spotlight angle detected: inner={inner_val}, outer={outer_val}.",
-                        file_path=filename,
-                        rule="spotlight_angle_invalid",
+    if "lightinnerangle" in content.lower():
+        inner_matches = list(RE_INNER_ANGLE.finditer(content))
+        outer_matches = list(RE_OUTER_ANGLE.finditer(content))
+        for im, om in zip(inner_matches, outer_matches):
+            try:
+                inner_val = float(im.group(1))
+                outer_val = float(om.group(1))
+                if inner_val < 0 or outer_val < 0:
+                    diagnostics.append(
+                        DiagnosticNotice(
+                            severity="warning",
+                            message=f"Negative spotlight angle detected: inner={inner_val}, outer={outer_val}.",
+                            file_path=filename,
+                            rule="spotlight_angle_invalid",
+                        )
                     )
-                )
-            elif inner_val > outer_val:
-                diagnostics.append(
-                    DiagnosticNotice(
-                        severity="warning",
-                        message=f"Inverted spotlight angles: innerAngle ({inner_val}) > outerAngle ({outer_val}).",
-                        file_path=filename,
-                        rule="spotlight_angle_inverted",
+                elif inner_val > outer_val:
+                    diagnostics.append(
+                        DiagnosticNotice(
+                            severity="warning",
+                            message=f"Inverted spotlight angles: innerAngle ({inner_val}) > outerAngle ({outer_val}).",
+                            file_path=filename,
+                            rule="spotlight_angle_inverted",
+                        )
                     )
-                )
-        except ValueError:
-            pass
+            except ValueError:
+                pass
 
     # 5. Check for malformed spotlight definition rows (fewer than 4 elements)
     # Scan spotlights array blocks
@@ -609,74 +613,123 @@ def enhance_highbeam_content(
     """Detect and enhance weak or short-range highbeam definitions.
 
     Eliminates the bug where highbeams illuminate poorly like lowbeams:
-    - Boosts weak lightRange (< 80.0m) to 120.0m for long-distance highway penetration.
-    - Boosts dim lightBrightness (< 1.0) to 2.2.
+    - Boosts weak lightRange (< 85.0m) to 120.0m for long-distance highway penetration.
+    - Boosts dim lightBrightness (< 1.8) to 2.2 for powerful long-range visibility.
     - Expands narrow lightOuterAngle (< 45.0°) to 55.0°.
+    - Injects quadratic lightAttenuation {"x": 0, "y": 1, "z": 1} for deep penetration.
     """
     diagnostics: List[DiagnosticNotice] = []
-    # Fast regex search without allocating duplicate lowercase string copies
     if not re.search(r'(?i)highbeam|high_beam|vehiclehighbeamflare', content):
         return content, 0, diagnostics
 
     fixes = 0
-    text = content
-    lines = text.splitlines(keepends=True)
-    new_lines = []
 
-    for line in lines:
+    def _process_highbeam_line(m: re.Match) -> str:
+        nonlocal fixes
+        line = m.group(1)
         line_lower = line.lower()
-        if ("highbeam" in line_lower or "high_beam" in line_lower or "vehiclehighbeamflare" in line_lower) and "{" in line:
-            # Check lightRange
-            m_r = re.search(r'(["\']lightRange["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', line)
-            if m_r:
-                val = float(m_r.group(2))
-                if val < 80.0:
-                    fixes += 1
-                    diagnostics.append(
-                        DiagnosticNotice(
-                            severity="info",
-                            message=f"Boosted weak highbeam lightRange from {val}m to 120.0m for long-distance highway penetration",
-                            file_path=filename,
-                            rule="highbeam_range_boosted",
-                        )
+
+        dict_matches = list(re.finditer(r'\{([^{}]+)\}', line))
+        if not dict_matches:
+            return line
+
+        # Identify properties dictionary (last dict or one with property tokens)
+        target_m = None
+        for dm in reversed(dict_matches):
+            dm_lower = dm.group(1).lower()
+            if any(k in dm_lower for k in ("light", "flare", "cookie", "shadow", "attenuation", "deformgroup")):
+                target_m = dm
+                break
+        if target_m is None:
+            target_m = dict_matches[-1]
+
+        dict_body = target_m.group(1)
+        modified_dict = dict_body
+
+        # 1. lightRange: Boost if < 85.0m or inject 120.0m if missing in spotlight row
+        m_r = re.search(r'(["\']lightRange["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', modified_dict)
+        if m_r:
+            val = float(m_r.group(2))
+            if val < 85.0:
+                fixes += 1
+                diagnostics.append(
+                    DiagnosticNotice(
+                        severity="info",
+                        message=f"Boosted weak highbeam lightRange from {val}m to 120.0m for long-distance highway penetration",
+                        file_path=filename,
+                        rule="highbeam_range_boosted",
                     )
-                    line = line[:m_r.start()] + f'{m_r.group(1)}120.0' + line[m_r.end():]
+                )
+                modified_dict = modified_dict[:m_r.start()] + f'{m_r.group(1)}120.0' + modified_dict[m_r.end():]
+        elif "spotlight" in line_lower:
+            fixes += 1
+            diagnostics.append(
+                DiagnosticNotice(
+                    severity="info",
+                    message="Injected explicit highbeam lightRange: 120.0m for long-distance highway penetration",
+                    file_path=filename,
+                    rule="highbeam_range_boosted",
+                )
+            )
+            modified_dict = f'"lightRange": 120.0, {modified_dict}'
 
-            # Check lightBrightness
-            m_b = re.search(r'(["\']lightBrightness["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', line)
-            if m_b:
-                val = float(m_b.group(2))
-                if val < 1.0:
-                    fixes += 1
-                    diagnostics.append(
-                        DiagnosticNotice(
-                            severity="info",
-                            message=f"Boosted dim highbeam lightBrightness from {val} to 2.2",
-                            file_path=filename,
-                            rule="highbeam_brightness_boosted",
-                        )
+        # 2. lightBrightness: Boost if < 1.8 or inject 2.2 if missing in spotlight row
+        m_b = re.search(r'(["\']lightBrightness["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', modified_dict)
+        if m_b:
+            val = float(m_b.group(2))
+            if val < 1.8:
+                fixes += 1
+                diagnostics.append(
+                    DiagnosticNotice(
+                        severity="info",
+                        message=f"Boosted dim highbeam lightBrightness from {val} to 2.2",
+                        file_path=filename,
+                        rule="highbeam_brightness_boosted",
                     )
-                    line = line[:m_b.start()] + f'{m_b.group(1)}2.2' + line[m_b.end():]
+                )
+                modified_dict = modified_dict[:m_b.start()] + f'{m_b.group(1)}2.2' + modified_dict[m_b.end():]
+        elif "spotlight" in line_lower:
+            fixes += 1
+            diagnostics.append(
+                DiagnosticNotice(
+                    severity="info",
+                    message="Injected explicit highbeam lightBrightness: 2.2",
+                    file_path=filename,
+                    rule="highbeam_brightness_boosted",
+                )
+            )
+            modified_dict = f'"lightBrightness": 2.2, {modified_dict}'
 
-            # Check lightOuterAngle
-            m_a = re.search(r'(["\']lightOuterAngle["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', line)
-            if m_a:
-                val = float(m_a.group(2))
-                if val < 45.0:
-                    fixes += 1
-                    diagnostics.append(
-                        DiagnosticNotice(
-                            severity="info",
-                            message=f"Expanded narrow highbeam lightOuterAngle from {val}° to 55.0°",
-                            file_path=filename,
-                            rule="highbeam_angle_expanded",
-                        )
+        # 3. lightOuterAngle: Expand if < 45.0°
+        m_a = re.search(r'(["\']lightOuterAngle["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', modified_dict)
+        if m_a:
+            val = float(m_a.group(2))
+            if val < 45.0:
+                fixes += 1
+                diagnostics.append(
+                    DiagnosticNotice(
+                        severity="info",
+                        message=f"Expanded narrow highbeam lightOuterAngle from {val}° to 55.0°",
+                        file_path=filename,
+                        rule="highbeam_angle_expanded",
                     )
-                    line = line[:m_a.start()] + f'{m_a.group(1)}55.0' + line[m_a.end():]
+                )
+                modified_dict = modified_dict[:m_a.start()] + f'{m_a.group(1)}55.0' + modified_dict[m_a.end():]
 
-        new_lines.append(line)
+        # 4. lightAttenuation: inject {"x": 0, "y": 1, "z": 1} if missing in spotlight row
+        if "spotlight" in line_lower and "lightattenuation" not in modified_dict.lower():
+            fixes += 1
+            modified_dict = f'"lightAttenuation": {{"x": 0, "y": 1, "z": 1}}, {modified_dict}'
 
-    fixed_text = "".join(new_lines)
+        if modified_dict != dict_body:
+            line = line[:target_m.start(1)] + modified_dict + line[target_m.end(1):]
+
+        return line
+
+    RE_HIGHBEAM_LINE = re.compile(
+        r'(?im)^([^\n]*(?:highbeam|high_beam|vehiclehighbeamflare)[^\n]*)$'
+    )
+    fixed_text = RE_HIGHBEAM_LINE.sub(_process_highbeam_line, content)
     if fixes == 0 and fixed_text == content:
         return content, 0, diagnostics
     return fixed_text, fixes, diagnostics

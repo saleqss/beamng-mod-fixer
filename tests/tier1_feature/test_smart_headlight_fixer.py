@@ -321,4 +321,37 @@ def test_enhance_weak_highbeam_range_and_brightness():
     assert any(d.rule == "highbeam_brightness_boosted" for d in diags)
 
 
+def test_enhance_short_range_highbeam_filament_spotlight():
+    """Verify that highbeam_filament with 10m range and narrow cone is boosted to 120m, 2.2, 55°."""
+    jbeam = '''{
+        "spotlights": [
+            ["type", "start", "stop", "step"],
+            ["highbeam_filament", "SPOTLIGHT", "n1", "n2", "n3", {"x": 0, "y": 0, "z": 0}, {"lightRange": 10.0, "lightBrightness": 0.5, "lightOuterAngle": 30.0}]
+        ]
+    }'''
+    fixed, count, diags = smart_fix_jbeam_content(jbeam)
+    assert '"lightRange": 120.0' in fixed
+    assert '"lightBrightness": 2.2' in fixed
+    assert '"lightOuterAngle": 55.0' in fixed
+    assert '"lightAttenuation": {"x": 0, "y": 1, "z": 1}' in fixed
+    assert any(d.rule == "highbeam_range_boosted" for d in diags)
+    assert any(d.rule == "highbeam_brightness_boosted" for d in diags)
+    assert any(d.rule == "highbeam_angle_expanded" for d in diags)
+
+
+def test_highbeam_row_injects_range_when_missing():
+    """Verify highbeam spotlight row missing explicit range receives 120m and 2.2 brightness."""
+    jbeam = '''{
+        "spotlights": [
+            ["type", "start", "stop", "step"],
+            ["highbeam", "SPOTLIGHT", "n1", "n2", "n3", {"x": 0, "y": 0, "z": 0}, {"flareName": "vehicleHighBeamFlare"}]
+        ]
+    }'''
+    fixed, count, diags = smart_fix_jbeam_content(jbeam)
+    assert '"lightRange": 120.0' in fixed
+    assert '"lightBrightness": 2.2' in fixed
+    assert any(d.rule == "highbeam_range_boosted" for d in diags)
+    assert any(d.rule == "highbeam_brightness_boosted" for d in diags)
+
+
 

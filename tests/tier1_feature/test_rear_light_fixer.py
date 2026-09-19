@@ -191,3 +191,49 @@ def test_overbright_rear_spotlights_calibrated_down():
     assert '"lightRange": 6.0' in fixed
     assert any(d.rule == "rear_brightness_calibrated" for d in diags)
     assert any(d.rule == "rear_range_calibrated" for d in diags)
+
+
+def test_crestik81_license_plate_floodlight_elimination():
+    """Verify that rogue license plate headlights (e.g. crestik81 16m floodlights) are clamped."""
+    crestik_sample = """{
+    "crestik81_licenseplate_R_light_norm": {
+        "information":{"name":"Rear License Plate Lights"},
+        "slotType" : "crestik81_licenseplate_R",
+        "props": [
+            ["func", "mesh", "idRef:", "idX:", "idY:", "baseRotation", "rotation", "translation", "min", "max", "offset", "multiplier"],
+            {
+                "lightInnerAngle":0,
+                "lightOuterAngle":170,
+                "lightBrightness":1.2,
+                "lightRange":16.0,
+                "lightColor":{"r":255, "g":255, "b":180, "a":255},
+                "lightCastShadows":false
+            },
+            ["lowhighbeam_filament", "SPOTLIGHT", "t4l", "t4", "t3l", {"x":-85, "y":0, "z":10}, {"x":0, "y":0, "z":0}, {"x":0, "y":0, "z":0}, 0, 0, 0, 1, {"lightRange": 16.0, "lightBrightness": 1.2, "lightOuterAngle": 170}]
+        ]
+    }
+    }"""
+    fixed, count, diags = enhance_rear_light_content(crestik_sample, "vehicles/crestik81/crestik81_licenseplate.jbeam")
+
+    # Template must be clamped to 1.5m range
+    assert '"lightRange": 1.5' in fixed or '"lightRange":1.5' in fixed.replace(" ", "")
+
+    # Spotlight row properties must be clamped
+    assert '"lightRange": 1.5' in fixed
+    assert '"lightBrightness": 0.04' in fixed
+    assert '"lightOuterAngle": 75.0' in fixed
+    assert '"lightColor": {"r": 255, "g": 240, "b": 200, "a": 255}' in fixed
+    assert '"lightAttenuation": {"x": 0, "y": 1, "z": 2}' in fixed
+    assert '"lightCastShadows": false' in fixed
+
+    # Coordinate dict {"x":-85, "y":0, "z":10} must remain intact
+    assert '{"x":-85, "y":0, "z":10}' in fixed
+
+    # 16.0m and 1.2 brightness must NOT remain in fixed text
+    assert '16.0' not in fixed
+    assert '"lightBrightness": 1.2' not in fixed
+    assert '"lightBrightness":1.2' not in fixed
+
+    assert any(d.rule == "rear_plate_floodlight_clamped" for d in diags)
+    assert any(d.rule == "rear_plate_angle_clamped" for d in diags)
+    assert any(d.rule == "rear_plate_color_calibrated" for d in diags)
