@@ -82,6 +82,13 @@ def load_cached_paths() -> Optional[Dict[str, Path]]:
         if not user_dir.exists() and not mods_dir.exists():
             return None
 
+        # Guard against lingering test directories when reading default global system config
+        lad = os.environ.get("LOCALAPPDATA")
+        default_cfg = (Path(lad) / CONFIG_DIR_NAME / CONFIG_FILE_NAME) if lad else None
+        if default_cfg and cache_file.resolve() == default_cfg.resolve():
+            if "pytest" in str(user_dir).lower() or "test_cli" in str(user_dir).lower():
+                return None
+
         return {
             "user_dir": user_dir,
             "mods_dir": mods_dir,
@@ -95,15 +102,15 @@ def load_cached_paths() -> Optional[Dict[str, Path]]:
 
 def save_cached_paths(paths: Dict[str, Path], force: bool = False) -> bool:
     """Save validated BeamNG paths to persistent cache for instant 0ms retrieval."""
-    # Safety check: avoid caching temporary test directories unless forced
+    cache_file = get_cache_config_path()
+
+    # Safety check: avoid caching temporary test directories unless explicitly forced
     if not force:
         if os.environ.get("PYTEST_CURRENT_TEST"):
             return False
         user_str = str(paths.get("user_dir", "")).lower()
         if "pytest" in user_str or "temp" in user_str or "tmp" in user_str:
             return False
-
-    cache_file = get_cache_config_path()
     try:
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         data = {

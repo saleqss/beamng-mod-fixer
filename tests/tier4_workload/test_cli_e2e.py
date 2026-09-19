@@ -165,11 +165,15 @@ def test_cli_user_dir_flag(tmp_path: Path) -> None:
 
 def test_cli_save_paths_flag(tmp_path: Path) -> None:
     """Test --save-paths saves explicit configuration without error."""
+    from beamng_mod_fixer.core.path_resolver import clear_cached_paths
     user_dir = tmp_path / "saved_user"
     user_dir.mkdir()
-    res = run_cli("--user-dir", str(user_dir), "--save-paths")
-    assert res.returncode == 0
-    assert "successfully saved" in res.stdout.lower()
+    try:
+        res = run_cli("--user-dir", str(user_dir), "--save-paths")
+        assert res.returncode == 0
+        assert "successfully saved" in res.stdout.lower()
+    finally:
+        clear_cached_paths()
 
 
 
