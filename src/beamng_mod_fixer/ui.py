@@ -18,7 +18,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from beamng_mod_fixer import __version__
-from beamng_mod_fixer.core.cache_cleaner import clean_shader_cache
+from beamng_mod_fixer.core.cache_cleaner import clean_shader_cache, clean_ui_cef_cache
 from beamng_mod_fixer.core.graphics_optimizer import (
     OPTIMIZATION_PRESETS,
     optimize_settings,
@@ -38,12 +38,13 @@ from beamng_mod_fixer.core.path_resolver import (
     save_cached_paths,
     validate_beamng_dir,
 )
+from beamng_mod_fixer.core.ui_fixer import unpack_container_mod_archives
 from beamng_mod_fixer.core.zip_processor import process_mod_archive, scan_and_fix_mods
 from beamng_mod_fixer.exceptions import BeamNGPathNotFoundError
 from beamng_mod_fixer.i18n import get_current_language, set_language, t
 from beamng_mod_fixer.models import DiagnosticNotice, ModStatus, OverallSummary
 
-# Enable Windows ANSI virtual terminal processing if available
+# Enable Windows ANSI virtual terminal processing and UTF-8 encoding if available
 if sys.platform == "win32":
     try:
         import ctypes
@@ -51,22 +52,39 @@ if sys.platform == "win32":
         kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
     except Exception:
         pass
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    if hasattr(sys.stderr, "reconfigure"):
+        try:
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 
-# ANSI Color Codes
+# ANSI Color Codes - Official BeamNG.drive Color Palette
 class Colors:
     RESET = "\033[0m"
     BOLD = "\033[1m"
     DIM = "\033[2m"
-    CYAN = "\033[96m"
-    GREEN = "\033[92m"
-    YELLOW = "\033[93m"
-    RED = "\033[91m"
-    MAGENTA = "\033[95m"
-    WHITE = "\033[97m"
-    GRAY = "\033[90m"
-    BG_BLUE = "\033[44m"
+
+    # Authentic BeamNG.drive Signature Colors
+    ORANGE = "\033[38;5;208m"        # BeamNG Signature Vibrant Orange (#FF6600)
+    ORANGE_BRIGHT = "\033[38;5;214m" # BeamNG Warm Accent Amber (#FF8700)
+    SLATE = "\033[38;5;239m"         # BeamNG Slate / Charcoal Border (#4E4E4E)
+    WHITE = "\033[97m"               # Crisp Clean White
+    GRAY = "\033[38;5;244m"          # Subtle Muted Slate
+    GREEN = "\033[92m"               # Success Indicator Green
+    RED = "\033[91m"                 # Error / Warning Red
+
+    # Palette Aliases (keeps terminal clean and consistent with BeamNG brand)
+    CYAN = "\033[38;5;208m"          # Mapped to BeamNG Orange
+    YELLOW = "\033[38;5;214m"        # Mapped to BeamNG Bright Orange
+    MAGENTA = "\033[38;5;214m"       # Mapped to BeamNG Accent Amber
     BG_DARK = "\033[40m"
+    BG_BLUE = "\033[48;5;236m"
 
 
 ASCII_BANNER = rf"""
@@ -82,7 +100,7 @@ ASCII_BANNER = rf"""
 ======================================================================
 """
 
-SPLASH_BANNER = f"""{Colors.CYAN}{Colors.BOLD}
+SPLASH_BANNER = f"""{Colors.ORANGE}{Colors.BOLD}
 ╔════════════════════════════════════════════════════════════════════════════════════════╗
 ║   ██████╗ ██████╗ ███████╗ █████╗ ███╗   ███╗   ███████╗██╗██╗  ██╗                    ║
 ║  ██╔════╝ ██╔══██╗██╔════╝██╔══██╗████╗ ████║   ██╔════╝██║╚██╗██╔╝                    ║
@@ -91,8 +109,8 @@ SPLASH_BANNER = f"""{Colors.CYAN}{Colors.BOLD}
 ║  ╚██████╔╝██████╔╝███████╗██║  ██║██║ ╚═╝ ██║   ██║     ██║██╔╝ ██╗                    ║
 ║   ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝   ╚═╝     ╚═╝╚═╝  ╚═╝                    ║
 ║                                                                                        ║
-║            {Colors.YELLOW}⚡ ULTIMATE GLOBAL MOD FIXER & GRAPHICS OPTIMIZER v{__version__} ⚡{Colors.CYAN}{Colors.BOLD}          ║
-║              {Colors.GREEN}BeamNG.drive 0.30 - 0.34+ Adaptive Community Standard{Colors.CYAN}{Colors.BOLD}                     ║
+║            {Colors.ORANGE_BRIGHT}⚡ ULTIMATE GLOBAL MOD FIXER & GRAPHICS OPTIMIZER v{__version__} ⚡{Colors.ORANGE}{Colors.BOLD}          ║
+║              {Colors.WHITE}BeamNG.drive 0.30 - 0.34+ Adaptive Community Standard{Colors.ORANGE}{Colors.BOLD}                     ║
 ╚════════════════════════════════════════════════════════════════════════════════════════╝{Colors.RESET}"""
 
 
@@ -146,18 +164,18 @@ def print_status_bar(paths: Dict[str, Path], watcher: Optional[ModWatcher] = Non
     else:
         watcher_info = f" {Colors.GRAY}[{t('auto_installer_status')}: {t('auto_installer_off')}]{Colors.RESET}"
 
-    print(f"{Colors.GRAY}┌─ {t('system_env')} (System & Game Environment) ─────────────────────────────┐{Colors.RESET}")
-    print(f"{Colors.GRAY}│{Colors.RESET} {Colors.WHITE}{t('user_dir')}:{Colors.RESET}     {Colors.CYAN}{paths.get('user_dir', 'Default')}{Colors.RESET}")
-    print(f"{Colors.GRAY}│{Colors.RESET} {Colors.WHITE}{t('mods_folder')} (Mods Folder): {Colors.RESET}{Colors.CYAN}{mods_dir}{Colors.RESET} {Colors.YELLOW}({t('mods_detected', count=mod_count)}){Colors.RESET}")
-    print(f"{Colors.GRAY}│{Colors.RESET} {Colors.WHITE}{t('engine_active')}:{Colors.RESET} {Colors.GREEN}100% Adaptive Multi-Domain Engine Active{Colors.RESET}{watcher_info}")
-    print(f"{Colors.GRAY}└─────────────────────────────────────────────────────────────────────────┘{Colors.RESET}\n")
+    print(f"{Colors.SLATE}┌─ {t('system_env')} (System & Game Environment) ─────────────────────────────┐{Colors.RESET}")
+    print(f"{Colors.SLATE}│{Colors.RESET} {Colors.WHITE}{t('user_dir')}:{Colors.RESET}     {Colors.ORANGE}{paths.get('user_dir', 'Default')}{Colors.RESET}")
+    print(f"{Colors.SLATE}│{Colors.RESET} {Colors.WHITE}{t('mods_folder')} (Mods Folder): {Colors.RESET}{Colors.ORANGE}{mods_dir}{Colors.RESET} {Colors.ORANGE_BRIGHT}({t('mods_detected', count=mod_count)}){Colors.RESET}")
+    print(f"{Colors.SLATE}│{Colors.RESET} {Colors.WHITE}{t('engine_active')}:{Colors.RESET} {Colors.GREEN}Adaptive Engine Active{Colors.RESET}{watcher_info}")
+    print(f"{Colors.SLATE}└─────────────────────────────────────────────────────────────────────────┘{Colors.RESET}\n")
 
 
 def pause_return() -> None:
     """Prompt user to press Enter before returning to menu."""
     if sys.stdin.isatty():
         try:
-            input(f"\n{Colors.YELLOW}{t('press_enter_return')}{Colors.RESET}")
+            input(f"\n{Colors.ORANGE_BRIGHT}{t('press_enter_return')}{Colors.RESET}")
         except (KeyboardInterrupt, EOFError):
             pass
 
@@ -174,23 +192,24 @@ class InteractiveCLI:
         """Main loop for the top-level menu."""
         while True:
             clear_screen()
-            print(SPLASH_BANNER)
+            print_splash_banner()
             print_status_bar(self.paths, self.watcher)
 
             lang_label = "Русский 🇷🇺" if get_current_language() == "ru" else "English 🇬🇧"
 
             print(f"{Colors.BOLD}{Colors.WHITE}{t('main_menu_title')}:{Colors.RESET}")
             print(f"  {Colors.GREEN}{Colors.BOLD}{t('opt_global_fix')}{Colors.RESET}")
-            print(f"  {Colors.CYAN}{t('opt_optics')}{Colors.RESET}")
-            print(f"  {Colors.YELLOW}{t('opt_materials')}{Colors.RESET}")
-            print(f"  {Colors.MAGENTA}{t('opt_drivetrain')}{Colors.RESET}")
-            print(f"  {Colors.WHITE}{t('opt_sound_lua')}{Colors.RESET}")
-            print(f"  {Colors.CYAN}{t('opt_graphics')}{Colors.RESET}")
+            print(f"  {Colors.ORANGE}{t('opt_optics')}{Colors.RESET}")
+            print(f"  {Colors.ORANGE_BRIGHT}{t('opt_materials')}{Colors.RESET}")
+            print(f"  {Colors.WHITE}{t('opt_drivetrain')}{Colors.RESET}")
+            print(f"  {Colors.ORANGE_BRIGHT}{t('opt_sound_lua')}{Colors.RESET}")
+            print(f"  {Colors.ORANGE}{t('opt_graphics')}{Colors.RESET}")
             print(f"  {Colors.GREEN}{t('opt_cache')}{Colors.RESET}")
-            print(f"  {Colors.YELLOW}{t('opt_audit')}{Colors.RESET}")
-            print(f"  {Colors.CYAN}{t('opt_paths')}{Colors.RESET}")
-            print(f"  {Colors.MAGENTA}{t('opt_watcher')}{Colors.RESET}")
-            print(f"  {Colors.WHITE}{t('opt_language')} [{Colors.YELLOW}{lang_label}{Colors.WHITE}]{Colors.RESET}")
+            print(f"  {Colors.ORANGE_BRIGHT}{t('opt_ui_fixer')}{Colors.RESET}")
+            print(f"  {Colors.WHITE}{t('opt_audit')}{Colors.RESET}")
+            print(f"  {Colors.ORANGE}{t('opt_paths')}{Colors.RESET}")
+            print(f"  {Colors.GREEN}{t('opt_watcher')}{Colors.RESET}")
+            print(f"  {Colors.WHITE}{t('opt_language')} [{Colors.ORANGE_BRIGHT}{lang_label}{Colors.WHITE}]{Colors.RESET}")
             print(f"  {Colors.RED}{t('opt_exit')}{Colors.RESET}")
 
             try:
@@ -214,13 +233,15 @@ class InteractiveCLI:
                 self.menu_graphics_optimizer()
             elif choice == "7":
                 self.menu_cache_purge()
-            elif choice == "8":
+            elif choice in ("8", "u", "ui"):
+                self.menu_ui_error_fixer()
+            elif choice in ("9", "a", "audit"):
                 self.action_deep_audit()
-            elif choice == "9":
+            elif choice in ("10", "p", "paths"):
                 self.menu_paths_manager()
-            elif choice in ("w", "10"):
+            elif choice in ("11", "w", "watcher"):
                 self.menu_mod_watcher()
-            elif choice == "l":
+            elif choice in ("12", "l", "lang"):
                 # Toggle language between ru and en
                 new_lang = "en" if get_current_language() == "ru" else "ru"
                 set_language(new_lang)
@@ -241,22 +262,40 @@ class InteractiveCLI:
     def action_global_fix(self) -> None:
         """Run complete 1-Click Global Fix across all 7 repair and optimization stages."""
         clear_screen()
-        print(SPLASH_BANNER)
+        print_splash_banner()
         print(f"{Colors.BOLD}{Colors.GREEN}╔════════════════════════════════════════════════════════════════════════════╗{Colors.RESET}")
         print(f"{Colors.BOLD}{Colors.GREEN}║          🚀 {t('global_fix_header'):^64} ║{Colors.RESET}")
         print(f"{Colors.BOLD}{Colors.GREEN}╚════════════════════════════════════════════════════════════════════════════╝{Colors.RESET}\n")
 
-        print(f"{Colors.CYAN}{t('global_fix_desc')}{Colors.RESET}\n")
+        print(f"{Colors.ORANGE}{t('global_fix_desc')}{Colors.RESET}\n")
 
-        # Mod Scan & Multi-Domain Repair (Stages 1 to 5)
-        print(f"{Colors.BOLD}{Colors.CYAN}[Stages 1-5/7]{Colors.RESET} {Colors.WHITE}Comprehensive Mod Archives Repair Pipeline:{Colors.RESET}")
-        print(f"  {Colors.CYAN}{t('stage_optics')}{Colors.RESET}   ({t('stage_optics_desc')})")
+        # Mod Scan & Multi-Domain Repair (Stages 1 to 6)
+        print(f"{Colors.BOLD}{Colors.ORANGE}[Stages 1-6/7]{Colors.RESET} {Colors.WHITE}Comprehensive Mod Archives Repair Pipeline:{Colors.RESET}")
+        print(f"  {Colors.ORANGE}{t('stage_optics')}{Colors.RESET}   ({t('stage_optics_desc')})")
         print(f"  {Colors.RED}{t('stage_rear')}{Colors.RESET}    ({t('stage_rear_desc')})")
-        print(f"  {Colors.YELLOW}{t('stage_materials')}{Colors.RESET} ({t('stage_materials_desc')})")
-        print(f"  {Colors.MAGENTA}{t('stage_drivetrain')}{Colors.RESET}({t('stage_drivetrain_desc')})")
-        print(f"  {Colors.WHITE}{t('stage_sound')}{Colors.RESET}           ({t('stage_sound_desc')})")
-        print(f"  {Colors.GREEN}{t('stage_lua')}{Colors.RESET}           ({t('stage_lua_desc')})")
+        print(f"  {Colors.ORANGE_BRIGHT}{t('stage_materials')}{Colors.RESET} ({t('stage_materials_desc')})")
+        print(f"  {Colors.WHITE}{t('stage_drivetrain')}{Colors.RESET} ({t('stage_drivetrain_desc')})")
+        print(f"  {Colors.ORANGE_BRIGHT}{t('stage_sound')}{Colors.RESET} ({t('stage_sound_desc')})")
+        print(f"  {Colors.GREEN}{t('stage_lua')}{Colors.RESET}   ({t('stage_lua_desc')})")
+        print(f"  {Colors.ORANGE}{t('stage_ui')}{Colors.RESET}    ({t('stage_ui_desc')})")
         print(f"  {Colors.DIM}Target Folder: {self.paths['mods_dir']}{Colors.RESET}\n")
+
+        mods_dir = self.paths["mods_dir"]
+        if not mods_dir.exists():
+            try:
+                mods_dir.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                pass
+
+        # Pre-scan: Unpack any nested container mod archives (*_UNZIP.zip)
+        try:
+            unpacked = unpack_container_mod_archives(mods_dir, dry_run=self.dry_run)
+            if unpacked:
+                print(f"  {Colors.ORANGE_BRIGHT}📦 Unpacked {len(unpacked)} container mod archive(s):{Colors.RESET}")
+                for cont_path, mod_names in unpacked:
+                    print(f"    - {cont_path.name} -> extracted {len(mod_names)} inner mod(s)")
+        except Exception as e:
+            logger.debug("Container unpack notice: %s", e)
 
         def _progress_cb(p: Path, r: Any, idx: int, tot: int) -> None:
             if r.status == ModStatus.FIXED.value:
@@ -273,6 +312,10 @@ class InteractiveCLI:
                     details.append(f"Audio: {r.sounds_fixed}")
                 if r.lua_fixed:
                     details.append(f"Lua: {r.lua_fixed}")
+                if r.ui_conflicts_fixed:
+                    details.append(f"UI conflicts: {r.ui_conflicts_fixed}")
+                if r.info_json_fixed:
+                    details.append(f"info.json: {r.info_json_fixed}")
                 det_str = ", ".join(details) if details else "repaired"
                 print(f"  [{idx:02d}/{tot:02d}] {Colors.GREEN}✔ {p.name}{Colors.RESET} -> {det_str}")
             elif r.status == ModStatus.CLEAN.value:
@@ -280,14 +323,7 @@ class InteractiveCLI:
             elif r.status == ModStatus.ERROR.value:
                 print(f"  [{idx:02d}/{tot:02d}] {Colors.RED}❌ {p.name}: Error ({r.error_message}){Colors.RESET}")
             elif r.status in (ModStatus.LOCKED.value, ModStatus.CORRUPT.value, ModStatus.ENCRYPTED.value):
-                print(f"  [{idx:02d}/{tot:02d}] {Colors.YELLOW}⚠ {p.name}: Skipped ({r.status.upper()}){Colors.RESET}")
-
-        mods_dir = self.paths["mods_dir"]
-        if not mods_dir.exists():
-            try:
-                mods_dir.mkdir(parents=True, exist_ok=True)
-            except OSError:
-                pass
+                print(f"  [{idx:02d}/{tot:02d}] {Colors.ORANGE_BRIGHT}⚠ {p.name}: Skipped ({r.status.upper()}){Colors.RESET}")
 
         try:
             summary = scan_and_fix_mods(
@@ -299,18 +335,19 @@ class InteractiveCLI:
                 fix_drivetrain=True,
                 fix_sound=True,
                 fix_lua=True,
+                fix_ui=True,
                 clean_junk=True,
                 progress_callback=_progress_cb,
             )
         except BeamNGPathNotFoundError as e:
-            print(f"  {Colors.YELLOW}⚠ Mods scan notice: {e}{Colors.RESET}")
+            print(f"  {Colors.ORANGE_BRIGHT}⚠ Mods scan notice: {e}{Colors.RESET}")
             summary = OverallSummary()
 
         graphics_status = "Skipped"
         cache_status = "Skipped"
 
         # Stage 6: Graphics & FPS Optimizer
-        print(f"\n{Colors.BOLD}{Colors.CYAN}[Stage 6/7]{Colors.RESET} {Colors.WHITE}{t('stage_graphics')}{Colors.RESET}")
+        print(f"\n{Colors.BOLD}{Colors.ORANGE}[Stage 6/7]{Colors.RESET} {Colors.WHITE}{t('stage_graphics')}{Colors.RESET}")
         try:
             opt_res = optimize_settings(self.paths["settings_dir"], preset="ultra-max-fps", dry_run=self.dry_run)
             graphics_status = f"Applied 'ultra-max-fps' ({len(opt_res.applied_keys)} keys tuned)"
@@ -319,17 +356,20 @@ class InteractiveCLI:
                 print(f"    Settings backup saved: {opt_res.backup_path}")
         except Exception as e:
             graphics_status = f"Warning: {e}"
-            print(f"  {Colors.YELLOW}⚠ Graphics optimize note: {e}{Colors.RESET}")
+            print(f"  {Colors.ORANGE_BRIGHT}⚠ Graphics optimize note: {e}{Colors.RESET}")
 
-        # Stage 7: Cache Purge
-        print(f"\n{Colors.BOLD}{Colors.CYAN}[Stage 7/7]{Colors.RESET} {Colors.WHITE}{t('stage_cache')}{Colors.RESET}")
+        # Stage 7: Cache Purge (Shader cache + CEF / UI browser cache)
+        print(f"\n{Colors.BOLD}{Colors.ORANGE}[Stage 7/7]{Colors.RESET} {Colors.WHITE}{t('stage_cache')}{Colors.RESET}")
         try:
             cache_res = clean_shader_cache(self.paths["cache_dir"], dry_run=self.dry_run)
-            cache_status = f"Purged {cache_res.files_deleted} files ({cache_res.bytes_freed / 1024 / 1024:.2f} MB freed)"
-            print(f"  {Colors.GREEN}✔ Purged {cache_res.files_deleted} cache files ({cache_res.bytes_freed / 1024 / 1024:.2f} MB freed){Colors.RESET}")
+            cef_res = clean_ui_cef_cache(self.paths["cache_dir"], dry_run=self.dry_run)
+            total_deleted = cache_res.files_deleted + cef_res.files_deleted
+            total_freed = cache_res.bytes_freed + cef_res.bytes_freed
+            cache_status = f"Purged {total_deleted} cache & CEF files ({total_freed / 1024 / 1024:.2f} MB freed)"
+            print(f"  {Colors.GREEN}✔ Purged {total_deleted} shader & CEF cache files ({total_freed / 1024 / 1024:.2f} MB freed){Colors.RESET}")
         except Exception as e:
             cache_status = f"Warning: {e}"
-            print(f"  {Colors.YELLOW}⚠ Cache clean note: {e}{Colors.RESET}")
+            print(f"  {Colors.ORANGE_BRIGHT}⚠ Cache clean note: {e}{Colors.RESET}")
 
         print(f"\n{Colors.GREEN}{Colors.BOLD}✔ {t('pipeline_complete')}{Colors.RESET}")
         if not os.environ.get("PYTEST_CURRENT_TEST"):
@@ -350,7 +390,7 @@ class InteractiveCLI:
         """Submenu for headlights and optics."""
         while True:
             clear_screen()
-            print(SPLASH_BANNER)
+            print_splash_banner()
             print(f"{Colors.BOLD}{Colors.CYAN}💡 HEADLIGHTS & OPTICS STUDIO{Colors.RESET}\n")
             print("  1. Smart Selective Fix (Recommended: fixes lowbeams, preserves highbeams, modernizes cookies)")
             print("  2. Force Legacy Fix (Forces lightCastShadows: false everywhere)")
@@ -416,7 +456,7 @@ class InteractiveCLI:
         """Submenu for materials and textures."""
         while True:
             clear_screen()
-            print(SPLASH_BANNER)
+            print_splash_banner()
             print(f"{Colors.BOLD}{Colors.YELLOW}🎨 MATERIALS & TEXTURE DOCTOR{Colors.RESET}\n")
             print("  1. Convert legacy materials.cs to modern main.materials.json (v1.5 PBR)")
             print("  2. Fix orange 'NO TEXTURE' & normalize VFS paths (\\ -> /)")
@@ -450,7 +490,7 @@ class InteractiveCLI:
         """Submenu for drivetrain and physics."""
         while True:
             clear_screen()
-            print(SPLASH_BANNER)
+            print_splash_banner()
             print(f"{Colors.BOLD}{Colors.MAGENTA}⚙️ DRIVETRAIN & PHYSICS REPAIR{Colors.RESET}\n")
             print("  1. Fix Differential Freeze & Physics Explosion (gearRatio, viscousCoupling)")
             print("  2. Fix Tire Pressures (pressurePSI) & Wheel Friction Coefficients")
@@ -484,7 +524,7 @@ class InteractiveCLI:
         """Submenu for sound and Lua."""
         while True:
             clear_screen()
-            print(SPLASH_BANNER)
+            print_splash_banner()
             print(f"{Colors.BOLD}{Colors.WHITE}🔊 SOUND & LUA CRASH GUARD{Colors.RESET}\n")
             print("  1. Modernize Obsolete Pre-FMOD Sound Paths to BeamNG FMOD Events")
             print("  2. Guard Deprecated Vehicle Lua Scripts (prevent fatal spawn crashes)")
@@ -520,7 +560,7 @@ class InteractiveCLI:
         """Submenu for graphics settings and ReShade presets."""
         while True:
             clear_screen()
-            print(SPLASH_BANNER)
+            print_splash_banner()
             print(f"{Colors.BOLD}{Colors.CYAN}🚀 {t('gfx_title')}{Colors.RESET}\n")
             print(f"  {t('gfx_preset_1')}")
             print(f"  {t('gfx_preset_2')}")
@@ -591,7 +631,7 @@ class InteractiveCLI:
         """Submenu for cleaning caches."""
         while True:
             clear_screen()
-            print(SPLASH_BANNER)
+            print_splash_banner()
             print(f"{Colors.BOLD}{Colors.GREEN}🧹 CACHE & DIAGNOSTICS PURGE{Colors.RESET}\n")
             print("  1. Purge compiled shader cache (.d3dcsx, .db)")
             print("  2. Full cache purge (shaders + vehicle AST + temporary binaries)")
@@ -613,13 +653,112 @@ class InteractiveCLI:
                 pause_return()
 
     # ==========================================================================
-    # Action 8: Deep Mod Health Audit
+    # Submenu 8: UI & Loading Screen Error Fixer
+    # ==========================================================================
+    def menu_ui_error_fixer(self) -> None:
+        """Submenu for resolving 'UI error while loading' and CEF crashes."""
+        while True:
+            clear_screen()
+            print_splash_banner()
+            print(f"{Colors.BOLD}{Colors.ORANGE}🖥️  {t('ui_fixer_title')}{Colors.RESET}\n")
+            print(f"{Colors.DIM}{t('ui_fixer_desc')}{Colors.RESET}\n")
+
+            print(f"  {Colors.GREEN}{t('ui_fix_all')}{Colors.RESET}")
+            print(f"  {Colors.ORANGE}{t('ui_fix_rogue')}{Colors.RESET}")
+            print(f"  {Colors.ORANGE_BRIGHT}{t('ui_fix_json')}{Colors.RESET}")
+            print(f"  {Colors.WHITE}{t('ui_unpack_containers')}{Colors.RESET}")
+            print(f"  {Colors.GREEN}{t('ui_clean_cef')}{Colors.RESET}")
+            print(f"  {Colors.GRAY}{t('opt_back')}{Colors.RESET}")
+
+            try:
+                raw_choice = input(f"\n{Colors.BOLD}{t('prompt_choice')}{Colors.RESET}").strip()
+                choice = raw_choice.strip("[]")
+            except (KeyboardInterrupt, EOFError):
+                return
+
+            if choice == "0":
+                return
+            elif choice in ("1", ""):
+                # Full UI repair
+                print(f"\n[*] Executing full UI repair pipeline on: {self.paths['mods_dir']}...")
+                unpacked = unpack_container_mod_archives(self.paths["mods_dir"], dry_run=self.dry_run)
+                if unpacked:
+                    print(f"  {Colors.GREEN}✔ Unpacked {len(unpacked)} container mod archive(s){Colors.RESET}")
+                summary = scan_and_fix_mods(
+                    self.paths["mods_dir"],
+                    dry_run=self.dry_run,
+                    selective=True,
+                    fix_rear_lights=False,
+                    fix_materials=False,
+                    fix_drivetrain=False,
+                    fix_sound=False,
+                    fix_lua=False,
+                    fix_ui=True,
+                    clean_junk=True,
+                )
+                cef_res = clean_ui_cef_cache(self.paths["cache_dir"], dry_run=self.dry_run)
+                print(f"  {Colors.GREEN}✔ Purged {cef_res.files_deleted} CEF cache files ({cef_res.bytes_freed / 1024 / 1024:.2f} MB freed){Colors.RESET}")
+                self.menu_fix_results(summary, title="UI & LOADING ERROR REPAIR REPORT")
+                return
+            elif choice == "2":
+                print(f"\n[*] Neutralizing rogue UI files (loading.js, core entrypoints)...")
+                summary = scan_and_fix_mods(
+                    self.paths["mods_dir"],
+                    dry_run=self.dry_run,
+                    fix_rear_lights=False,
+                    fix_materials=False,
+                    fix_drivetrain=False,
+                    fix_sound=False,
+                    fix_lua=False,
+                    fix_ui=True,
+                    clean_junk=False,
+                )
+                self.menu_fix_results(summary, title="ROGUE UI NEUTRALIZATION REPORT")
+                return
+            elif choice == "3":
+                print(f"\n[*] Repairing malformed info.json files across mods...")
+                summary = scan_and_fix_mods(
+                    self.paths["mods_dir"],
+                    dry_run=self.dry_run,
+                    fix_rear_lights=False,
+                    fix_materials=False,
+                    fix_drivetrain=False,
+                    fix_sound=False,
+                    fix_lua=False,
+                    fix_ui=True,
+                    clean_junk=False,
+                )
+                self.menu_fix_results(summary, title="INFO.JSON REPAIR REPORT")
+                return
+            elif choice == "4":
+                print(f"\n[*] Scanning for container ZIP archives (*_UNZIP.zip) in: {self.paths['mods_dir']}...")
+                unpacked = unpack_container_mod_archives(self.paths["mods_dir"], dry_run=self.dry_run)
+                if not unpacked:
+                    print(f"  {Colors.GREEN}✔ No container ZIP archives found. All mods are clean single archives.{Colors.RESET}")
+                else:
+                    print(f"  {Colors.GREEN}✔ Successfully processed {len(unpacked)} container archives:{Colors.RESET}")
+                    for cont_path, inner_names in unpacked:
+                        print(f"    - {cont_path.name} -> {', '.join(inner_names)}")
+                pause_return()
+            elif choice == "5":
+                print(f"\n[*] Purging CEF browser and UI caches in: {self.paths['cache_dir']}...")
+                cef_res = clean_ui_cef_cache(self.paths["cache_dir"], dry_run=self.dry_run)
+                print(f"\n{Colors.GREEN}✔ CEF & UI cache cleared successfully!{Colors.RESET}")
+                print(f"  Files deleted:    {cef_res.files_deleted}")
+                print(f"  Disk space freed: {cef_res.bytes_freed / 1024 / 1024:.2f} MB")
+                pause_return()
+            else:
+                print(f"{Colors.RED}{t('invalid_opt')}{Colors.RESET}")
+                time.sleep(1)
+
+    # ==========================================================================
+    # Action 9: Deep Mod Health Audit
     # ==========================================================================
     def action_deep_audit(self) -> None:
         """Run deep health audit without modifying files."""
         clear_screen()
         print(SPLASH_BANNER)
-        print(f"{Colors.BOLD}{Colors.YELLOW}📋 DEEP MOD HEALTH AUDIT (DRY-RUN){Colors.RESET}\n")
+        print(f"{Colors.BOLD}{Colors.ORANGE_BRIGHT}📋 DEEP MOD HEALTH AUDIT (DRY-RUN){Colors.RESET}\n")
         print(f"[*] Analyzing mod archives in: {self.paths['mods_dir']} without modifying files...\n")
 
         summary = scan_and_fix_mods(
@@ -630,6 +769,7 @@ class InteractiveCLI:
             fix_drivetrain=True,
             fix_sound=True,
             fix_lua=True,
+            fix_ui=True,
             clean_junk=True,
         )
         # Transition into dedicated Post-Fix Studio Menu
@@ -642,7 +782,7 @@ class InteractiveCLI:
         """Submenu for Downloads Watcher and Mod Auto-Installer."""
         while True:
             clear_screen()
-            print(SPLASH_BANNER)
+            print_splash_banner()
             print(f"{Colors.BOLD}{Colors.MAGENTA}⚡ {t('watcher_title')}{Colors.RESET}\n")
             print(f"{Colors.DIM}{t('watcher_desc')}{Colors.RESET}\n")
 
@@ -703,7 +843,7 @@ class InteractiveCLI:
         """Submenu for viewing and changing BeamNG paths with automatic validation."""
         while True:
             clear_screen()
-            print(SPLASH_BANNER)
+            print_splash_banner()
             print(f"{Colors.BOLD}{Colors.CYAN}📁 BEAMNG DIRECTORY & PATH MANAGEMENT{Colors.RESET}\n")
 
             user_dir = self.paths.get("user_dir", Path("."))
@@ -802,7 +942,7 @@ class InteractiveCLI:
         """
         while True:
             clear_screen()
-            print(SPLASH_BANNER)
+            print_splash_banner()
             self._print_summary_report(
                 summary,
                 title=title,
@@ -846,7 +986,7 @@ class InteractiveCLI:
     def _view_detailed_diagnostics(self, summary: OverallSummary) -> None:
         """Display individual diagnostic notices collected across all processed archives."""
         clear_screen()
-        print(SPLASH_BANNER)
+        print_splash_banner()
         print(f"{Colors.BOLD}{Colors.CYAN}📋 DETAILED MOD DIAGNOSTIC NOTICES{Colors.RESET}\n")
 
         all_diags: List[Tuple[str, DiagnosticNotice]] = []
@@ -877,9 +1017,9 @@ class InteractiveCLI:
         cache_status: Optional[str] = None,
     ) -> None:
         """Format and print a structured diagnostic summary report."""
-        print("\n" + f"{Colors.CYAN}═" * 70 + f"{Colors.RESET}")
+        print("\n" + f"{Colors.ORANGE}═" * 70 + f"{Colors.RESET}")
         print(f"{Colors.BOLD}{Colors.WHITE}  {title}{Colors.RESET}")
-        print(f"{Colors.CYAN}═" * 70 + f"{Colors.RESET}")
+        print(f"{Colors.ORANGE}═" * 70 + f"{Colors.RESET}")
         print(f"  {t('rep_scanned'):<38} : {Colors.BOLD}{summary.total_scanned}{Colors.RESET}")
         print(f"  {t('rep_fixed'):<38} : {Colors.GREEN}{summary.modified_archives}{Colors.RESET}")
         print(f"  {t('rep_clean'):<38} : {Colors.WHITE}{summary.clean_archives}{Colors.RESET}")
@@ -890,14 +1030,16 @@ class InteractiveCLI:
         print(f"  {t('rep_drivetrain'):<38} : {Colors.GREEN}{summary.drivetrains_fixed}{Colors.RESET}")
         print(f"  {t('rep_sound'):<38} : {Colors.GREEN}{summary.sounds_fixed}{Colors.RESET}")
         print(f"  {t('rep_lua'):<38} : {Colors.GREEN}{summary.lua_fixed}{Colors.RESET}")
+        print(f"  {t('rep_ui_conflicts'):<38} : {Colors.GREEN}{summary.ui_conflicts_fixed}{Colors.RESET}")
+        print(f"  {t('rep_info_json'):<38} : {Colors.GREEN}{summary.info_json_fixed}{Colors.RESET}")
         if graphics_status:
-            print(f"  {t('rep_graphics')} (Graphics & FPS optimization)  : {Colors.CYAN}{graphics_status}{Colors.RESET}")
+            print(f"  {t('rep_graphics')} (Graphics & FPS optimization)  : {Colors.ORANGE}{graphics_status}{Colors.RESET}")
         if cache_status:
             print(f"  {t('rep_cache')} (DirectX/Vulkan cache purge)   : {Colors.GREEN}{cache_status}{Colors.RESET}")
         print(f"  {t('rep_junk'):<38} : {Colors.GREEN}{summary.junk_cleaned}{Colors.RESET}")
-        print(f"  {t('rep_locked'):<38} : {Colors.YELLOW}{summary.skipped_locked}{Colors.RESET}")
+        print(f"  {t('rep_locked'):<38} : {Colors.ORANGE_BRIGHT}{summary.skipped_locked}{Colors.RESET}")
         print(f"  {t('rep_corrupt'):<38} : {Colors.RED}{summary.skipped_corrupt}{Colors.RESET}")
-        print(f"  {t('rep_encrypted'):<38} : {Colors.YELLOW}{summary.skipped_encrypted}{Colors.RESET}")
+        print(f"  {t('rep_encrypted'):<38} : {Colors.ORANGE_BRIGHT}{summary.skipped_encrypted}{Colors.RESET}")
         print(f"  {t('rep_errors'):<38} : {Colors.RED}{summary.errors_encountered}{Colors.RESET}")
         print(f"  {t('rep_elapsed'):<38} : {Colors.WHITE}{summary.elapsed_seconds:.2f}s{Colors.RESET}")
-        print(f"{Colors.CYAN}═" * 70 + f"{Colors.RESET}")
+        print(f"{Colors.ORANGE}═" * 70 + f"{Colors.RESET}")

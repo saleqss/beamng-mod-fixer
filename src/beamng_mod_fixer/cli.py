@@ -7,7 +7,7 @@ import sys
 from typing import List, Optional
 
 from beamng_mod_fixer import __version__
-from beamng_mod_fixer.core.cache_cleaner import clean_shader_cache
+from beamng_mod_fixer.core.cache_cleaner import clean_shader_cache, clean_ui_cef_cache
 from beamng_mod_fixer.core.graphics_optimizer import (
     OPTIMIZATION_PRESETS,
     optimize_settings,
@@ -23,6 +23,7 @@ from beamng_mod_fixer.core.reshade_manager import (
     deploy_all_reshade_presets,
     deploy_reshade_preset,
 )
+from beamng_mod_fixer.core.ui_fixer import unpack_container_mod_archives
 from beamng_mod_fixer.core.zip_processor import scan_and_fix_mods
 from beamng_mod_fixer.i18n import set_language
 from beamng_mod_fixer.models import ModStatus
@@ -38,8 +39,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "GBEAM FIX — Ultimate Global Mod Fixer & Graphics Optimizer for BeamNG.drive:\n"
             "Automatically repair broken headlights, convert materials.cs to JSON 1.5, fix orange NO TEXTURE,\n"
-            "repair frozen differentials/physics, modernize audio to FMOD, optimize graphics settings for 60+ FPS,\n"
-            "and safely clean corrupted shader caches."
+            "repair frozen differentials/physics, modernize audio to FMOD, fix loading screen UI errors, optimize graphics,\n"
+            "and safely clean corrupted shader and CEF caches."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -121,6 +122,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Guard deprecated vehicle Lua calls (prevent fatal script crashes on spawn).",
     )
     actions_group.add_argument(
+        "--fix-ui",
+        action="store_true",
+        help="Fix 'UI error while loading' crashes: neutralize rogue loading.js and repair malformed info.json.",
+    )
+    actions_group.add_argument(
+        "--unpack-containers",
+        action="store_true",
+        help="Extract nested .zip mod packages from container archives (*_UNZIP.zip) in mods folder.",
+    )
+    actions_group.add_argument(
         "--optimize-graphics",
         action="store_true",
         help="Deploy high-performance graphics preset to BeamNG settings (fast reflections, soft shadows).",
@@ -129,6 +140,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--clean-cache",
         action="store_true",
         help="Safely purge compiled DirectX/Vulkan shader binaries (.d3dcsx, .db) in temp/.",
+    )
+    actions_group.add_argument(
+        "--clean-cef",
+        action="store_true",
+        help="Purge Chromium Embedded Framework (CEF) and UI caches in temp/ui, temp/cef.",
     )
     actions_group.add_argument(
         "-a", "--all", "--global-fix",
@@ -268,8 +284,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         or args.fix_drivetrain
         or args.fix_sound
         or args.fix_lua
+        or args.fix_ui
+        or args.unpack_containers
         or args.optimize_graphics
         or args.clean_cache
+        or args.clean_cef
         or args.all
         or args.watch
         or args.deploy_reshade
@@ -322,15 +341,32 @@ def main(argv: Optional[List[str]] = None) -> int:
     run_drivetrain = args.fix_drivetrain or args.all or not has_specific_action
     run_sound = args.fix_sound or args.all or not has_specific_action
     run_lua = args.fix_lua or args.all or not has_specific_action
+    run_ui = args.fix_ui or args.all or not has_specific_action
+    run_containers = args.unpack_containers or args.all
     run_graphics = args.optimize_graphics or args.all or not has_specific_action
     run_cache = args.clean_cache or args.all or not has_specific_action
+    run_cef = args.clean_cef or args.all or not has_specific_action
     selective_fix = (args.mode == "smart")
 
     dry_run_tag = " [DRY RUN]" if args.dry_run else ""
     success = True
 
+    # Pre-action: Unpack nested container archives
+    if run_containers:
+        if not args.quiet:
+            print(f"\n[*] Scanning for container mod archives (*_UNZIP.zip) in: {mods_dir}{dry_run_tag}")
+        try:
+            unpacked = unpack_container_mod_archives(mods_dir, dry_run=args.dry_run)
+            if not args.quiet:
+                print(f"  Container archives unpacked: {len(unpacked)}")
+                for cont_path, mod_names in unpacked:
+                    print(f"    - {cont_path.name} -> {', '.join(mod_names)}")
+        except Exception as e:
+            logger.error("Error unpacking container archives in '%s': %s", mods_dir, e)
+            success = False
+
     # Action 1: Mod Scanning & Multi-Domain Repair
-    if run_mods or run_rear_lights or run_materials or run_drivetrain or run_sound or run_lua:
+    if run_mods or run_rear_lights or run_materials or run_drivetrain or run_sound or run_lua or run_ui:
         mode_tag = " (smart selective)" if selective_fix else " (legacy)"
         if not args.quiet:
             print(f"\n[*] Scanning & fixing mods in: {mods_dir}{mode_tag}{dry_run_tag}")
@@ -344,6 +380,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 fix_drivetrain=run_drivetrain,
                 fix_sound=run_sound,
                 fix_lua=run_lua,
+                fix_ui=run_ui,
                 clean_junk=True,
                 progress_callback=(
                     None
@@ -373,6 +410,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"  Drivetrain & diff repaired: {summary.drivetrains_fixed}")
                 print(f"  FMOD audio modernized     : {summary.sounds_fixed}")
                 print(f"  Vehicle Lua guarded       : {summary.lua_fixed}")
+                print(f"  Rogue UI neutralized      : {summary.ui_conflicts_fixed}")
+                print(f"  info.json files repaired  : {summary.info_json_fixed}")
                 print(f"  Archive junk removed      : {summary.junk_cleaned}")
                 print(f"  Skipped (locked/in-use)   : {summary.skipped_locked}")
                 print(f"  Skipped (corrupt)         : {summary.skipped_corrupt}")
@@ -428,17 +467,20 @@ def main(argv: Optional[List[str]] = None) -> int:
             success = False
 
     # Action 3: Clean cache
-    if run_cache:
+    if run_cache or run_cef:
         if not args.quiet:
-            print(f"\n[*] Cleaning temporary shader caches in: {cache_dir}{dry_run_tag}")
+            print(f"\n[*] Cleaning temporary shader and CEF caches in: {cache_dir}{dry_run_tag}")
         try:
             clean_res = clean_shader_cache(cache_dir, dry_run=args.dry_run)
+            cef_res = clean_ui_cef_cache(cache_dir, dry_run=args.dry_run) if run_cef else None
+            total_deleted = clean_res.files_deleted + (cef_res.files_deleted if cef_res else 0)
+            total_freed = clean_res.bytes_freed + (cef_res.bytes_freed if cef_res else 0)
             if not args.quiet:
                 print(f"  Cache clean status  : {'SUCCESS' if clean_res.success else 'FAILED'}")
-                print(f"  Files removed       : {clean_res.files_deleted}")
-                print(f"  Disk space freed    : {clean_res.bytes_freed / 1024 / 1024:.2f} MB")
+                print(f"  Files removed       : {total_deleted}")
+                print(f"  Disk space freed    : {total_freed / 1024 / 1024:.2f} MB")
             else:
-                print(f"Cache cleared: files={clean_res.files_deleted}, freed={clean_res.bytes_freed}B")
+                print(f"Cache cleared: files={total_deleted}, freed={total_freed}B")
             if not clean_res.success:
                 success = False
         except Exception as e:

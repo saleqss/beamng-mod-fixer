@@ -223,6 +223,28 @@ def test_cli_deploy_reshade_flag(tmp_path: Path) -> None:
     assert "CAS.fx" in medium_ini.read_text(encoding="utf-8")
 
 
+def test_cli_fix_ui_and_cef_flags(tmp_path: Path) -> None:
+    """Test running CLI with --fix-ui and --clean-cef flags."""
+    tree = create_synthetic_beamng_user_dir(tmp_path / "user")
+    mods_dir = tree["mods_dir"]
+    temp_dir = tree["temp_dir"]
+
+    # Create dummy mod with rogue loading.js
+    import zipfile
+    rogue_mod = mods_dir / "bad_ui_mod.zip"
+    with zipfile.ZipFile(rogue_mod, "w") as zf:
+        zf.writestr("vehicles/bad/bad.jbeam", '{"bad": {"glowMap": {}}}')
+        zf.writestr("ui/modules/loading/loading.js", "angular.module('bad', []);")
+
+    res = run_cli("--mods-dir", str(mods_dir), "--cache-dir", str(temp_dir), "--fix-ui", "--clean-cef")
+    assert res.returncode == 0
+    assert "rogue ui neutralized" in res.stdout.lower() or "mod scan & repair summary" in res.stdout.lower()
+
+    # Verify rogue loading.js removed
+    with zipfile.ZipFile(rogue_mod, "r") as zf:
+        assert "ui/modules/loading/loading.js" not in zf.namelist()
+
+
 
 
 

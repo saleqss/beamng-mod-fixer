@@ -182,3 +182,82 @@ def clean_shader_cache(
         success=True,
         error_message=None,
     )
+
+
+def clean_ui_cef_cache(
+    beamng_user_path: Path,
+    dry_run: bool = False,
+) -> CacheCleanResult:
+    """Targeted purge of CEF and UI temporary caches to fix 'UI error while loading'.
+
+    Specifically targets:
+    - temp/ui/ (cached angular templates and scripts)
+    - temp/cef/ (Chromium cache, GPUCache, code cache)
+    - temp/cef_cache/
+    - temp/cache/
+
+    Args:
+        beamng_user_path: Path to BeamNG user directory.
+        dry_run: If True, calculates deletions without modifying the filesystem.
+
+    Returns:
+        CacheCleanResult with statistics.
+    """
+    target_temp_dir = _resolve_temp_directory(beamng_user_path)
+    ui_subdirs = ["ui", "cef", "cef_cache", "cache"]
+
+    files_to_delete: List[Path] = []
+    bytes_freed: int = 0
+    directories_cleaned: List[Path] = []
+    skipped_files: List[Path] = []
+
+    for sub in ui_subdirs:
+        sub_dir = target_temp_dir / sub
+        if not sub_dir.exists() or not sub_dir.is_dir():
+            continue
+
+        for root, _dirs, files in os.walk(sub_dir):
+            root_path = Path(root)
+            for filename in files:
+                file_path = root_path / filename
+                if file_path.suffix.lower() == ".pc":
+                    skipped_files.append(file_path)
+                    continue
+                try:
+                    size = file_path.stat().st_size
+                except OSError:
+                    size = 0
+
+                if dry_run:
+                    files_to_delete.append(file_path)
+                    bytes_freed += size
+                else:
+                    try:
+                        file_path.unlink()
+                        files_to_delete.append(file_path)
+                        bytes_freed += size
+                    except (PermissionError, OSError) as e:
+                        logger.warning("Could not delete UI cache file %s: %s", file_path, e)
+                        skipped_files.append(file_path)
+
+        for root, _dirs, _files in os.walk(sub_dir, topdown=False):
+            root_path = Path(root)
+            if dry_run:
+                directories_cleaned.append(root_path)
+            else:
+                try:
+                    if not any(root_path.iterdir()):
+                        root_path.rmdir()
+                        directories_cleaned.append(root_path)
+                except OSError:
+                    pass
+
+    return CacheCleanResult(
+        files_deleted=len(files_to_delete),
+        bytes_freed=bytes_freed,
+        directories_cleaned=directories_cleaned,
+        skipped_files=skipped_files,
+        success=True,
+        error_message=None,
+    )
+

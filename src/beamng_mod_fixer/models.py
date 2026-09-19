@@ -82,6 +82,8 @@ class ModArchiveReport:
     drivetrains_fixed: int = 0
     sounds_fixed: int = 0
     lua_fixed: int = 0
+    ui_conflicts_fixed: int = 0
+    info_json_fixed: int = 0
     junk_cleaned: int = 0
     diagnostics: List[DiagnosticNotice] = field(default_factory=list)
     error_message: Optional[str] = None
@@ -106,6 +108,8 @@ class ModArchiveReport:
             "drivetrains_fixed": self.drivetrains_fixed,
             "sounds_fixed": self.sounds_fixed,
             "lua_fixed": self.lua_fixed,
+            "ui_conflicts_fixed": self.ui_conflicts_fixed,
+            "info_json_fixed": self.info_json_fixed,
             "junk_cleaned": self.junk_cleaned,
             "diagnostics": [d.to_dict() for d in self.diagnostics],
             "error_message": self.error_message,
@@ -175,6 +179,8 @@ class OverallSummary:
     drivetrains_fixed: int = 0
     sounds_fixed: int = 0
     lua_fixed: int = 0
+    ui_conflicts_fixed: int = 0
+    info_json_fixed: int = 0
     junk_cleaned: int = 0
     skipped_locked: int = 0
     skipped_corrupt: int = 0
@@ -206,6 +212,8 @@ class OverallSummary:
             "drivetrains_fixed": self.drivetrains_fixed,
             "sounds_fixed": self.sounds_fixed,
             "lua_fixed": self.lua_fixed,
+            "ui_conflicts_fixed": self.ui_conflicts_fixed,
+            "info_json_fixed": self.info_json_fixed,
             "junk_cleaned": self.junk_cleaned,
             "skipped_locked": self.skipped_locked,
             "skipped_corrupt": self.skipped_corrupt,

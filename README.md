@@ -3,7 +3,7 @@
 [![CI](https://github.com/saleqss/beamng-mod-fixer/actions/workflows/ci.yml/badge.svg)](https://github.com/saleqss/beamng-mod-fixer/actions)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-280%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
+[![Tests](https://img.shields.io/badge/tests-288%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
 [![BeamNG Compatibility](https://img.shields.io/badge/BeamNG.drive-0.30%20--%200.34%2B-orange)](https://beamng.com)
 
 > **The all-in-one community standard toolkit for BeamNG.drive (0.30 - 0.34+).** Automatically resolves **all major mod breakages** after game updates: pitch-black headlights, rear white spotlight bug on headlights, blinding nuclear-red brake discs, weak highbeams, orange `"NO TEXTURE"` (including nested mod folder unwrapping), obsolete `materials.cs`, frozen vehicles & exploding differentials, tire blowouts (`pressurePSI`), silent engines & pre-FMOD audio crashes, and fatal vehicle Lua errors. Features a **background Downloads auto-installer**, 4 tailored graphics presets with **automatic ReShade preset deployment** (Medium 60FPS Optimal, Low Fast, Potato Boost, Ultra Photoreal), and a clean bilingual interface.
@@ -80,6 +80,9 @@ agy-gbeam-fix
 │ 🛡️ Lua Script Guard    │ Guards deprecated v.data & obj:queueGameEngineLua calls,      │
 │                        │ preventing fatal UI and gauge script crashes on vehicle spawn │
 ├────────────────────────┼───────────────────────────────────────────────────────────────┤
+│ 🖥️ UI & Loading Fixer  │ Resolves "UI error while loading", neutralizes rogue loading.js│
+│                        │ overrides, repairs malformed info.json, unpacks container zips│
+├────────────────────────┼───────────────────────────────────────────────────────────────┤
 │ ⚡ Auto-Installer      │ Background Downloads watcher: detects new mods, unwraps,      │
 │                        │ moves to mods/, and executes 7-stage repair on the fly        │
 ├────────────────────────┼───────────────────────────────────────────────────────────────┤
@@ -128,6 +131,30 @@ Mods often had highbeams that cut off at 3-5 meters like weak flashlights. GBEAM
 
 ---
 
+## 🖥️ UI & Loading Screen Error Fixer: "UI error while loading" Cured
+
+### 1. Root Cause Analysis
+A widespread error dialog after game updates or installing older community mods:
+> *"UI error while loading. Try launching the game in Safe Mode (mods disabled)."*
+
+When inspecting the CEF boot log (`%LOCALAPPDATA%/BeamNG/BeamNG.drive/current/beamng.log`):
+```text
+69.34520|W|CEF.MainGEUI#local://local/ui/entrypoints/main/boot.js:326| Timed out while waiting for readiness checks on () => engineReady
+69.34526|E|CEF.MainGEUI#local://local/ui/entrypoints/main/boot.js:280| Error: Timed out while waiting for readiness checks
+```
+
+**Why this occurs**:
+1. **Rogue UI Overrides in Vehicle Mods**: Ancient vehicle mods (such as `hachiimpreza2.zip` and others created for BeamNG 0.5 - 0.14) bundled copies of the game's old loading screen: `ui/modules/loading/loading.js` (written in AngularJS 1.x). When mounted by PhysFS, this obsolete file overwrites BeamNG 0.30+'s modern Vue loading screen, preventing the game engine from receiving the modern `engineReady` event. After 60 seconds, CEF times out and halts the game.
+2. **Malformed `info.json` Files**: Mod archives frequently contain syntax errors (trailing commas, unquoted keys, C++ comments `//`, single quotes), crashing the vehicle selector indexer in CEF.
+3. **Container ZIP Packs**: Mods packaged as `*_UNZIP.zip` contain inner `.zip` archives that BeamNG cannot mount directly.
+4. **Stale CEF Cache**: Corrupted Chromium cache files lingering in `temp/cef/` and `temp/ui/`.
+
+### 2. GBEAM FIX Solution
+- **Neutralizes Rogue UI**: Identifies and safely strips `ui/modules/loading/loading.js` and rogue `ui/entrypoints/*` files from mod archives without affecting custom vehicle dashboard displays or gauges.
+- **Repairs `info.json`**: Strips comments, single quotes, unquoted keys, control characters, and trailing commas, restoring full RFC 8259 JSON compliance.
+- **Unpacks Container Archives**: Automatically unpacks nested `.zip` bundles into valid single mod archives.
+- **Purges CEF Cache**: Safely purges `temp/ui/`, `temp/cef/`, and `temp/cef_cache/` without touching vehicle configurations (`.pc`).
+
 ## ⚡ Background Mod Auto-Installer & Downloads Watcher
 
 GBEAM FIX features the `ModWatcher` background service:
@@ -160,21 +187,23 @@ Run `agy-gbeam-fix`:
 
 ```text
 MAIN CONTROL MENU (ГЛАВНОЕ МЕНЮ):
-  1. 🚀 1-Click Global Fix (Optics + Textures + Physics + Audio + Lua + Graphics + Cache)
+  1. 🚀 1-Click Global Fix (Optics + Textures + UI Errors + Physics + Audio + Lua + Graphics + Cache)
   2. 💡 Headlights & Optics Studio (Low/high beam balance, angle repair, cookie modernizer)
   3. 🎨 Materials & Texture Doctor (Fix NO TEXTURE, materials.cs -> 1.5 JSON, VFS paths)
   4. ⚙️ Drivetrain & Physics Repair (Fix frozen cars, differential explosion, tire PSI)
   5. 🔊 Sound & Lua Crash Guard (Modernize FMOD audio, guard deprecated lua APIs)
   6. 🚀 Graphics & FPS Optimizer (Ultra-Max-FPS, 60FPS-Balanced, Low, Potato presets)
   7. 🧹 Cache & Diagnostics Purge (DirectX/Vulkan shaders, vehicle binaries, temp files)
-  8. 📋 Deep Mod Health Audit (Safe non-modifying dry-run scan with report)
-  9. 📁 BeamNG Directory & Paths (Auto-detection & path validator across drives)
+  8. 🖥️ UI & Loading Error Fix (Fix 'UI error while loading', clean CEF cache)
+  9. 📋 Deep Mod Health Audit (Safe non-modifying dry-run scan with report)
+  P. 📁 BeamNG Directory & Paths (Auto-detection & path validator across drives)
   W. ⚡ Mod Auto-Installer & Downloads Watcher
   L. 🌐 Change Language / Сменить язык (English / Русский)
   0. 🚪 Exit
 ```
 
 - **1-Click Global Fix (Option 1)**: Runs all 7 repair stages, optimizes graphics, and clears cache. Opens the **Post-Fix Results Studio**, and option `1` or `Enter` returns cleanly to the Main Menu.
+- **UI & Loading Screen Fixer (Option 8)**: Neutralizes rogue `loading.js` overrides, fixes `info.json` syntax, unpacks container archives, and clears CEF cache.
 - **Language Toggle (Option L)**: Instantly toggles between English and Russian, persisted in `~/.beamng_mod_fixer/config.json`.
 - **Clean Typography**: Bracket-free design without bracket spam.
 
@@ -185,6 +214,12 @@ MAIN CONTROL MENU (ГЛАВНОЕ МЕНЮ):
 ```bash
 # 1-Click Global Fix (All 7 repair stages + graphics + cache clean)
 agy-gbeam-fix --all
+
+# Fix UI loading screen errors and purge CEF cache
+agy-gbeam-fix --fix-ui --clean-cef
+
+# Unpack container ZIP archives (*_UNZIP.zip)
+agy-gbeam-fix --unpack-containers
 
 # Launch background Downloads watcher for automatic installation and repair
 agy-gbeam-fix --watch
@@ -214,9 +249,9 @@ agy-gbeam-fix --all --dry-run
 
 ---
 
-## 🧪 280 Automated Quality Tests
+## 🧪 288 Automated Quality Tests
 
-Backed by a rigorous test suite of **280 automated tests** across 5 tiers:
+Backed by a rigorous test suite of **288 automated tests** across 5 tiers:
 
 ```bash
 python -m pytest -v

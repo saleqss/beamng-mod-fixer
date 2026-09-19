@@ -39,6 +39,7 @@ from beamng_mod_fixer.core.materials_fixer import (
 )
 from beamng_mod_fixer.core.rear_light_fixer import enhance_rear_light_content
 from beamng_mod_fixer.core.sound_fixer import fix_sound_content
+from beamng_mod_fixer.core.ui_fixer import fix_info_json_content, is_rogue_ui_entry
 from beamng_mod_fixer.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -176,6 +177,7 @@ def process_mod_archive(
     fix_drivetrain: bool = True,
     fix_sound: bool = True,
     fix_lua: bool = True,
+    fix_ui: bool = True,
     clean_junk: bool = True,
 ) -> ModArchiveReport:
     """Process an individual BeamNG mod archive with comprehensive multi-domain repair.
@@ -189,6 +191,7 @@ def process_mod_archive(
        - materials.cs: Conversion to modern main.materials.json v1.5 PBR.
        - *.materials.json: Version upgrade, path normalization, VFS texture reconciliation.
        - *.lua: Deprecated API guarding against fatal vehicle Lua crashes.
+       - UI & metadata: Neutralizing rogue loading.js overrides and repairing malformed info.json.
        - Junk files: Removal of Thumbs.db, .DS_Store, .bak, .tmp clutter.
     5. Atomic in-place replacement via temporary file swap if modified and not dry_run.
 
@@ -201,6 +204,7 @@ def process_mod_archive(
         fix_drivetrain: If True, repairs broken differentials, tire pressures, and clutch parameters.
         fix_sound: If True, modernizes legacy sound paths to BeamNG FMOD events.
         fix_lua: If True, guards deprecated vehicle Lua calls.
+        fix_ui: If True, neutralizes rogue core UI conflicts and repairs malformed info.json.
         clean_junk: If True, cleans OS junk files from archive.
 
     Returns:
@@ -323,6 +327,20 @@ def process_mod_archive(
                             )
                         )
                         continue
+
+                # Clean rogue core UI files (e.g. obsolete loading.js that breaks loading screen)
+                if fix_ui and is_rogue_ui_entry(entry.filename) and not entry.is_dir():
+                    deleted_entries.add(entry.filename)
+                    report.ui_conflicts_fixed += 1
+                    report.diagnostics.append(
+                        DiagnosticNotice(
+                            severity="info",
+                            message=f"Neutralized rogue core UI conflict '{entry.filename}' (fixes 'UI error while loading')",
+                            file_path=entry.filename,
+                            rule="rogue_ui_override_neutralized",
+                        )
+                    )
+                    continue
 
                 # 4a. JBeam files
                 if entry_name_lower.endswith(".jbeam") and not entry.is_dir():
@@ -492,6 +510,28 @@ def process_mod_archive(
                             )
                         )
 
+                # 4e. Metadata info.json / mod_info.json / model_info.json
+                elif fix_ui and entry_name_lower.endswith(("info.json", "mod_info.json", "model_info.json")) and not entry.is_dir():
+                    try:
+                        raw_data = zf.read(entry.filename)
+                        json_text, encoding = decode_jbeam_bytes(raw_data)
+                        repaired_json, json_modified, json_diags = fix_info_json_content(
+                            json_text,
+                            filename=entry.filename
+                        )
+                        if json_modified:
+                            report.info_json_fixed += 1
+                            report.diagnostics.extend(json_diags)
+                            modified_files[entry.filename] = encode_jbeam_str(repaired_json, encoding)
+                    except Exception as info_err:
+                        report.diagnostics.append(
+                            DiagnosticNotice(
+                                severity="warning",
+                                message=f"Failed processing info.json in '{entry.filename}': {info_err}",
+                                file_path=entry.filename,
+                            )
+                        )
+
     except zipfile.BadZipFile as e:
         report.status = ModStatus.CORRUPT.value
         report.error_message = f"Corrupted ZIP archive: {e}"
@@ -523,6 +563,8 @@ def process_mod_archive(
         + report.drivetrains_fixed
         + report.sounds_fixed
         + report.lua_fixed
+        + report.ui_conflicts_fixed
+        + report.info_json_fixed
         + report.junk_cleaned
         + len(added_files)
         + (1 if nested_prefix else 0)
@@ -657,6 +699,7 @@ def scan_and_fix_mods(
     fix_drivetrain: bool = True,
     fix_sound: bool = True,
     fix_lua: bool = True,
+    fix_ui: bool = True,
     clean_junk: bool = True,
 ) -> OverallSummary:
     """Scan a directory for BeamNG mod ZIP archives and perform comprehensive multi-domain repair.
@@ -673,6 +716,7 @@ def scan_and_fix_mods(
         fix_drivetrain: If True, repairs differentials, tire pressures, and clutch parameters.
         fix_sound: If True, modernizes legacy audio paths to BeamNG FMOD events.
         fix_lua: If True, guards deprecated vehicle Lua scripts.
+        fix_ui: If True, neutralizes rogue core UI conflicts and repairs malformed info.json.
         clean_junk: If True, cleans OS junk files.
 
     Returns:
@@ -707,6 +751,7 @@ def scan_and_fix_mods(
             fix_drivetrain=fix_drivetrain,
             fix_sound=fix_sound,
             fix_lua=fix_lua,
+            fix_ui=fix_ui,
             clean_junk=clean_junk,
         )
 
@@ -723,6 +768,8 @@ def scan_and_fix_mods(
             summary.drivetrains_fixed += report.drivetrains_fixed
             summary.sounds_fixed += report.sounds_fixed
             summary.lua_fixed += report.lua_fixed
+            summary.ui_conflicts_fixed += report.ui_conflicts_fixed
+            summary.info_json_fixed += report.info_json_fixed
             summary.junk_cleaned += report.junk_cleaned
             summary.archive_reports.append(report)
 
@@ -770,6 +817,8 @@ def scan_and_fix_mods(
                 summary.drivetrains_fixed += report.drivetrains_fixed
                 summary.sounds_fixed += report.sounds_fixed
                 summary.lua_fixed += report.lua_fixed
+                summary.ui_conflicts_fixed += report.ui_conflicts_fixed
+                summary.info_json_fixed += report.info_json_fixed
                 summary.junk_cleaned += report.junk_cleaned
                 summary.archive_reports.append(report)
 
