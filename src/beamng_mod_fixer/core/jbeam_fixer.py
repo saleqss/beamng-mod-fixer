@@ -602,6 +602,86 @@ def audit_spotlights(
     return diagnostics
 
 
+def enhance_highbeam_content(
+    content: str,
+    filename: str = "",
+) -> Tuple[str, int, List[DiagnosticNotice]]:
+    """Detect and enhance weak or short-range highbeam definitions.
+
+    Eliminates the bug where highbeams illuminate poorly like lowbeams:
+    - Boosts weak lightRange (< 80.0m) to 120.0m for long-distance highway penetration.
+    - Boosts dim lightBrightness (< 1.0) to 2.2.
+    - Expands narrow lightOuterAngle (< 45.0°) to 55.0°.
+    """
+    diagnostics: List[DiagnosticNotice] = []
+    # Fast regex search without allocating duplicate lowercase string copies
+    if not re.search(r'(?i)highbeam|high_beam|vehiclehighbeamflare', content):
+        return content, 0, diagnostics
+
+    fixes = 0
+    text = content
+    lines = text.splitlines(keepends=True)
+    new_lines = []
+
+    for line in lines:
+        line_lower = line.lower()
+        if ("highbeam" in line_lower or "high_beam" in line_lower or "vehiclehighbeamflare" in line_lower) and "{" in line:
+            # Check lightRange
+            m_r = re.search(r'(["\']lightRange["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', line)
+            if m_r:
+                val = float(m_r.group(2))
+                if val < 80.0:
+                    fixes += 1
+                    diagnostics.append(
+                        DiagnosticNotice(
+                            severity="info",
+                            message=f"Boosted weak highbeam lightRange from {val}m to 120.0m for long-distance highway penetration",
+                            file_path=filename,
+                            rule="highbeam_range_boosted",
+                        )
+                    )
+                    line = line[:m_r.start()] + f'{m_r.group(1)}120.0' + line[m_r.end():]
+
+            # Check lightBrightness
+            m_b = re.search(r'(["\']lightBrightness["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', line)
+            if m_b:
+                val = float(m_b.group(2))
+                if val < 1.0:
+                    fixes += 1
+                    diagnostics.append(
+                        DiagnosticNotice(
+                            severity="info",
+                            message=f"Boosted dim highbeam lightBrightness from {val} to 2.2",
+                            file_path=filename,
+                            rule="highbeam_brightness_boosted",
+                        )
+                    )
+                    line = line[:m_b.start()] + f'{m_b.group(1)}2.2' + line[m_b.end():]
+
+            # Check lightOuterAngle
+            m_a = re.search(r'(["\']lightOuterAngle["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', line)
+            if m_a:
+                val = float(m_a.group(2))
+                if val < 45.0:
+                    fixes += 1
+                    diagnostics.append(
+                        DiagnosticNotice(
+                            severity="info",
+                            message=f"Expanded narrow highbeam lightOuterAngle from {val}° to 55.0°",
+                            file_path=filename,
+                            rule="highbeam_angle_expanded",
+                        )
+                    )
+                    line = line[:m_a.start()] + f'{m_a.group(1)}55.0' + line[m_a.end():]
+
+        new_lines.append(line)
+
+    fixed_text = "".join(new_lines)
+    if fixes == 0 and fixed_text == content:
+        return content, 0, diagnostics
+    return fixed_text, fixes, diagnostics
+
+
 # ==============================================================================
 # JBeam Content Fixer Engine
 # ==============================================================================
@@ -617,6 +697,7 @@ def fix_jbeam_content(
     normalize_electrics: bool = True,
     repair_angles: bool = True,
     fix_rear_lights: bool = False,
+    enhance_highbeams: bool = True,
 ) -> Tuple[str, int, List[DiagnosticNotice]]:
     """Fix broken headlight self-shadow occlusion and normalize optics in JBeam text.
 
@@ -899,6 +980,12 @@ def fix_jbeam_content(
         text, rear_count, rear_diags = enhance_rear_light_content(text, filename=filename)
         fix_count += rear_count
         diagnostics.extend(rear_diags)
+
+    # 8. Highbeam Penetration & Range Enhancement
+    if enhance_highbeams:
+        text, hb_count, hb_diags = enhance_highbeam_content(text, filename=filename)
+        fix_count += hb_count
+        diagnostics.extend(hb_diags)
 
     # If no modifications were made, return original content object and fix_count=0
     if fix_count == 0 and text == content:

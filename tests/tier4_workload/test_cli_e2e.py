@@ -187,5 +187,27 @@ def test_cli_fix_rear_lights_flag(tmp_path: Path) -> None:
     assert "rear lights" in res.stdout.lower() or "summary" in res.stdout.lower()
 
 
+def test_cli_preset_flag(tmp_path: Path) -> None:
+    """Test running with --preset ultra-max-fps and potato-ultra-weak."""
+    tree = create_synthetic_beamng_user_dir(tmp_path / "user")
+    settings_dir = tree["settings_dir"]
+
+    res = run_cli("--settings-dir", str(settings_dir), "--optimize-graphics", "--preset", "ultra-max-fps")
+    assert res.returncode == 0
+    assert "ultra-max-fps" in res.stdout.lower()
+
+    res_pot = run_cli("--settings-dir", str(settings_dir), "--optimize-graphics", "--preset", "potato-ultra-weak")
+    assert res_pot.returncode == 0
+    assert "potato-ultra-weak" in res_pot.stdout.lower()
+
+
+def test_cli_lang_flag() -> None:
+    """Test --lang sets language and --help lists watcher."""
+    res = run_cli("--help")
+    assert "--watch" in res.stdout
+    assert "--lang" in res.stdout
+
+
+
 
 

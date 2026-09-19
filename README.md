@@ -1,12 +1,12 @@
-# 🚗 GBEAM FIX: Ultimate Global Mod Fixer & Graphics Optimizer for BeamNG.drive
+# 🚗 GBEAM FIX: Ultimate Global Mod Fixer, Auto-Installer & Graphics Optimizer for BeamNG.drive
 
 [![CI](https://github.com/saleqss/beamng-mod-fixer/actions/workflows/ci.yml/badge.svg)](https://github.com/saleqss/beamng-mod-fixer/actions)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-259%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
+[![Tests](https://img.shields.io/badge/tests-273%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
 [![BeamNG Compatibility](https://img.shields.io/badge/BeamNG.drive-0.30%20--%200.34%2B-orange)](https://beamng.com)
 
-> **The all-in-one community standard toolkit for BeamNG.drive.** Automatically resolves **all major mod breakages** after game updates (0.30 - 0.34+): pitch-black headlights, non-illuminating rear & reverse lights, orange `"NO TEXTURE"`, pixelated liveries, broken `materials.cs`, frozen vehicles & exploding differentials, tire blowouts (`pressurePSI`), silent engines & pre-FMOD audio crashes, and fatal vehicle Lua errors. Deploys cinematic high-FPS graphics presets and cleans corrupt shader caches.
+> **The all-in-one community standard toolkit for BeamNG.drive (0.30 - 0.34+).** Automatically resolves **all major mod breakages** after game updates: pitch-black headlights, rear white spotlight bug on headlights, blinding nuclear-red brake discs, weak highbeams, orange `"NO TEXTURE"` (including nested mod folder unwrapping), obsolete `materials.cs`, frozen vehicles & exploding differentials, tire blowouts (`pressurePSI`), silent engines & pre-FMOD audio crashes, and fatal vehicle Lua errors. Features a **background Downloads auto-installer**, 4 tailored graphics presets, and a clean bilingual interface.
 
 *Читать на русском языке: [README_RU.md](README_RU.md)*
 
@@ -21,7 +21,7 @@
 ║  ╚██████╔╝██████╔╝███████╗██║  ██║██║ ╚═╝ ██║   ██║     ██║██╔╝ ██╗                    ║
 ║   ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝   ╚═╝     ╚═╝╚═╝  ╚═╝                    ║
 ║                                                                                        ║
-║               ⚡ ULTIMATE GLOBAL MOD FIXER & GRAPHICS OPTIMIZER v1.2.0 ⚡               ║
+║               ⚡ ULTIMATE GLOBAL MOD FIXER & GRAPHICS OPTIMIZER v1.3.0 ⚡               ║
 ║                 BeamNG.drive 0.30 - 0.34+ Adaptive Community Standard                  ║
 ╚════════════════════════════════════════════════════════════════════════════════════════╝
 ```
@@ -39,235 +39,193 @@ pip install git+https://github.com/saleqss/beamng-mod-fixer.git
 
 *Alternatively, clone and install in editable mode:*
 ```bash
+cd C:\path\to\workspace
 git clone https://github.com/saleqss/beamng-mod-fixer.git
 cd beamng-mod-fixer
 pip install -e .
 ```
 
 ### 2. Launch Anywhere via Terminal
-Open **PowerShell**, **Command Prompt**, or **Terminal** and enter any of the registered quick commands:
+Open **PowerShell**, **Command Prompt**, or **Terminal** and enter:
 
 ```bash
 agy-gbeam-fix
 ```
 
-*(You can also use `gbeam-fix` or `agy-beam`)*
+*(Registered quick aliases: `gbeam-fix` and `agy-beam`)*
 
 ---
 
-## 🌐 Full Spectrum of Problems Fixed by GBEAM FIX
-
-BeamNG.drive updates (0.30 through 0.34+) overhauled graphics, lighting, materials, and powertrain architectures. Legacy mods authored for older versions suffer from fatal breaks across several major domains:
+## 🌐 Full Scope of Problems Solved by GBEAM FIX v1.3.0
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                GBEAM FIX REPAIR DOMAINS                                │
+│                               GBEAM FIX REPAIR DOMAINS                                 │
 ├────────────────────────┬───────────────────────────────────────────────────────────────┤
-│ 💡 Front Headlights    │ Self-shadow bumper blackout, inverted cone angles, cookie     │
-│                        │ path 404s, obsolete flare names, missing emissive glow         │
+│ 💡 Front Headlights    │ Pitch-black lowbeams (bumper self-shadowing), dim highbeams   │
+│                        │ (boosted to 120m), inverted cone angles, 404 missing cookies   │
 ├────────────────────────┼───────────────────────────────────────────────────────────────┤
-│ 🚨 Rear Ground Light   │ Reverse lights (crisp white flood), brake lights (vivid red   │
-│                        │ road wash), taillights (soft road wash), cookie cutoff purge  │
+│ 🚨 Rear Lights Balance │ Eliminates white rear light bug (template inheritance fix),   │
+│                        │ eliminates blinding red discs with soft ambient road wash     │
 ├────────────────────────┼───────────────────────────────────────────────────────────────┤
-│ 🎨 Materials & Textures│ Orange "NO TEXTURE", legacy materials.cs -> 1.5 JSON,         │
-│                        │ Windows backslash '\' path fixes, VFS texture reconciliation  │
+│ 🎨 Materials & Textures│ Orange "NO TEXTURE", unwraps nested archive wrapper folders,  │
+│                        │ converts materials.cs to JSON 1.5 PBR, normalizes VFS paths   │
 ├────────────────────────┼───────────────────────────────────────────────────────────────┤
-│ ⚙️ Drivetrain & Physics│ Physics freeze & car explosion, differential division by 0,   │
-│                        │ viscousCoupling clamp (>10000), flat tire blowout (PSI <= 0)  │
+│ ⚙️ Physics & Drivetrain│ Vehicle freeze on spawn, differential explosion, viscous      │
+│                        │ coupling clamp (>10000), tire blowouts on spawn (PSI <= 0)    │
 ├────────────────────────┼───────────────────────────────────────────────────────────────┤
-│ 🔊 Sound & Audio       │ Obsolete pre-FMOD sound paths (art/sound/*) modernized to     │
-│                        │ official BeamNG FMOD events (eliminates silent engine spawn)  │
+│ 🔊 Audio & Sound       │ Modernizes legacy art/sound/* paths to official BeamNG FMOD   │
+│                        │ sound events (fixes silent engines and FMOD engine errors)    │
 ├────────────────────────┼───────────────────────────────────────────────────────────────┤
-│ 🛡️ Vehicle Lua Guard   │ Deprecated obj:queueGameEngineLua, unguarded v.data accesses, │
-│                        │ preventing fatal script crash on vehicle spawn                │
+│ 🛡️ Lua Script Guard    │ Guards deprecated v.data & obj:queueGameEngineLua calls,      │
+│                        │ preventing fatal UI and gauge script crashes on vehicle spawn │
 ├────────────────────────┼───────────────────────────────────────────────────────────────┤
-│ 🚀 Graphics & FPS      │ Native uncompressed textures (16x anisotropic, detailAdjust 2)│
-│                        │ 60FPS fast dynamic reflections (facesPerUpdate: 3), cache purge│
+│ ⚡ Auto-Installer      │ Background Downloads watcher: detects new mods, unwraps,      │
+│                        │ moves to mods/, and executes 7-stage repair on the fly        │
+├────────────────────────┼───────────────────────────────────────────────────────────────┤
+│ 🚀 Graphics & FPS      │ 4 presets: Ultra-Max-FPS (100% Ultra, no blur, smart 3-face), │
+│                        │ Medium-60FPS, Low-Weak, Potato-Ultra-Weak for weak laptops    │
 └────────────────────────┴───────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 💡 The Physics Behind Headlight Breakage
+## 💡 Lighting Calibration & Balance: White Rear Lights & Nuclear Red Discs Solved
 
-### 1. Why Did Headlights Go Black?
-In modern BeamNG (Torque3D Clustered Forward+ PBR), headlights cast dynamic shadows if `"lightCastShadows": true`. 
-However, in 90% of vehicle mods, the spotlight's origin node sits slightly behind or inside the headlight 3D lens or front bumper mesh. As a result, **the car's own body casts a pitch-black shadow directly in front of the vehicle**, blocking the beam completely!
+### 1. The White Rear Light Bug (Template Inheritance)
+In BeamNG's JBeam parser, table rows inside `props` inherit any unassigned property from the preceding template dictionary. Mod authors frequently defined a reverse light template with white color:
+```json
+{"lightColor": {"r": 255, "g": 255, "b": 255, "a": 255}}
+```
+Followed by taillights or `lowhighbeam` rows that omitted `lightColor`. Consequently, turning on the car's headlights caused the rear to blast an intense **white spotlight onto the ground**!
+> **GBEAM FIX Resolution**: Injects an explicit, calibrated `lightColor` into every rear lamp row:
+> - Taillights & brake lights: rich red `{"r": 255, "g": 20, "b": 20, "a": 255}`
+> - Reverse lights: warm white `{"r": 255, "g": 250, "b": 220, "a": 255}`
+> - Turn signals: amber `{"r": 255, "g": 140, "b": 15, "a": 255}`
 
-### 2. Why Blunt Fixers Broke Highbeams & Cockpits
-Older third-party scripts bluntly replaced `lightCastShadows: true` with `false` everywhere. This caused:
-- **Cockpit Blinding / Light Bleed**: Highbeams without shadow casting shine directly through the firewall and dashboard, completely washing out the driver's interior camera at night.
-- **Lost Environmental Depth**: Highbeams lost realistic shadow casting behind roadside trees and buildings.
+### 2. Eliminating Blinding Nuclear-Red Discs on the Road
+Crude brightness values ($0.85 - 1.2$) combined with linear attenuation produced hard-edged, oversaturated glowing red discs on the pavement.
+> **GBEAM FIX Resolution**:
+> - Taillight brightness calibrated to natural `0.12`
+> - Brake light brightness balanced at `0.35`
+> - Quadratic attenuation injected: `lightAttenuation: {"x": 0, "y": 1, "z": 2}` for smooth road illumination without hard circular edges
+> - Shadow casting disabled (`lightCastShadows: false`) to avoid rear bumper occlusion artifacts.
 
-### 3. GBEAM FIX Smart Selective Solution
-GBEAM FIX implements **context-aware selective fixing**:
-- **Lowbeams & Fog Lights**: Set `lightCastShadows: false` (eliminates bumper self-shadow occlusion).
-- **Highbeams**: Strictly **retains `lightCastShadows: true`** (preserves distance shadows and cockpit integrity).
-- **Inverted Angles**: If `lightInnerAngle >= lightOuterAngle`, the Torque3D falloff equation divides by zero or evaluates negative, turning off the light. GBEAM FIX repairs the angle ratio to standard geometry.
-- **Modern Cookies**: Replaces dead pre-PBR cookies (`art/shapes/lights/*`) with official `art/special/BNG_light_cookie_headlight.dds`.
-- **Flare Modernization**: Updates legacy `headlightFlare` to official `vehicleHeadLightFlare`.
-
----
-
-## 🚨 Rear Lights Ground Illumination: Road Wash for Reverse, Brake & Taillights
-
-In many popular vehicle mods (including Cadillac Escalade, BMW, Nissan, Audi, Toyota, etc.), **rear lights appear lit on the body but cast zero light onto the ground or environment behind the car**.
-
-### Why Rear Lights Didn't Illuminate the Ground:
-1. **Microscopic Legacy Brightness**: Ports from pre-PBR BeamNG versions retained tiny `lightBrightness` values ($0.02 - 0.07$) and restricted range ($6 - 8\text{m}$). In modern physical rendering, these values produce zero perceptible photons on asphalt.
-2. **Obsolete Headlight Cookies**: Many reverse light fixtures referenced `BNG_light_cookie_headlight.dds`. Headlight cookies contain sharp asymmetric cutoff masks designed for lowbeam headlights, which completely blocked diffuse rear illumination.
-3. **Occluding Self-Shadows**: When `lightCastShadows: true` is left on rear lamps, the tailgate, trunk lip, or rear bumper casts an impenetrable self-shadow that completely eclipses the ground beneath and behind the car.
-4. **Syntax Comma Errors**: Missing commas between props and beam rows frequently caused BeamNG's JBeam compiler to silently discard rear spotlight definitions entirely.
-
-### GBEAM FIX Rear Light Enhancement Engine:
-- **Reverse Lights**: Boosted to `lightBrightness: 1.2` with `lightRange: 16.0m` and clean white tint (`rgb: 255, 255, 255`), casting a crisp, bright flood of light across the road when reversing in the dark.
-- **Brake Lights**: Enhanced to `lightBrightness: 0.85` with `lightRange: 14.0m` and rich red road wash (`rgb: 255, 30, 20`).
-- **Taillights / Parking**: Tuned to `lightBrightness: 0.35` with `lightRange: 14.0m` for an authentic nighttime ambient glow behind the car.
-- **Cookie Neutralization**: Strips directional cutoff cookies from rear lamps to ensure conical, even ground spread.
-- **Self-Shadow Disabling**: Enforces `lightCastShadows: false` specifically on rear fixtures, guaranteeing that no bumper self-occlusion prevents the road from lighting up.
+### 3. Penetrating Highbeam Boost (No More Weak Highbeams)
+Mods often had highbeams that cut off at 3-5 meters like weak flashlights. GBEAM FIX automatically boosts underperforming highbeams:
+- Distance: `lightRange: 120.0m`
+- Brightness: `lightBrightness: 2.2`
+- Outer angle: `lightOuterAngle: 55.0°`
 
 ---
 
-## 🎨 Materials & Texture Doctor: Eliminating Orange "NO TEXTURE"
+## 🎨 Materials Doctor: Fixing Orange "NO TEXTURE"
 
-In BeamNG 0.30+, the old TorqueScript `materials.cs` file is obsolete and often ignored by the engine. Unconverted mods spawn with the infamous orange-and-black grid "NO TEXTURE".
-
-GBEAM FIX features a full **TorqueScript Parser & Modern PBR 1.5 Converter**:
-1. **Automated Conversion**: Reads all `materials.cs` blocks (`diffuseMap`, `normalMap`, `specularMap`, `specularPower`, `translucent`) and creates modern `main.materials.json` with version `1.5`.
-2. **VFS Path Normalization**: Replaces Windows backslashes `\` with forward slashes `/` and strips illegal leading slashes.
-3. **Texture Reconciliation**: If a JSON file asks for `.png` but only `.dds` exists in the archive (or vice versa), GBEAM FIX automatically updates the path.
-4. **Light Emissive Glow**: Ensures lighting materials (`headlight`, `taillight`, `brakelight`, `signal`, `glow`) have proper `emissiveFactor: [1, 1, 1]` so lights visibly illuminate when switched on!
+1. **Unwrapping Nested Folders**: Many mod archives contain a root wrapper folder (e.g. `SuperCar_v1/vehicles/...`). The game's PhysFS virtual file system fails to find files at this depth and shows orange placeholder textures. GBEAM FIX automatically detects and strips this prefix, restructuring the archive cleanly to `vehicles/...`.
+2. **TorqueScript `materials.cs` to JSON 1.5 Converter**: Migrates old materials to the modern PBR 1.5 format.
+3. **VFS Path Normalization**: Converts Windows backslashes `\` to standard `/`.
+4. **Texture Format Reconciler**: Automatically maps `.png` references to optimized `.dds` files if present.
 
 ---
 
-## ⚙️ Drivetrain & Physics Repair: No More Frozen or Exploding Cars
+## ⚡ Background Mod Auto-Installer & Downloads Watcher
 
-1. **Differential Freeze**: Older mods defining `"gearRatio": 0` or missing ratios trigger a division by zero in the powertrain solver, causing the car to spawn frozen in place or fall through the map. GBEAM FIX restores standard ratios (e.g. 3.73).
-2. **Viscous Coupling Explosion**: Several legacy mods have `viscousCoupling` stiffness set to $> 10000$. Under modern physics tick rates, this produces infinite acceleration (`inf` velocity) and tears the vehicle mesh apart instantly. GBEAM FIX clamps this safely to $250$.
-3. **Flat Tires & Blowouts**: Missing or zero `pressurePSI` causes instant tire deflations or wheel explosion spikes. GBEAM FIX standardizes tire pressures to $30.0\text{ PSI}$ and normalizes extreme friction coefficients.
-4. **Clutch Slip**: Zero or negative `clutchTorque` values are restored to standard $350\text{ N}\cdot\text{m}$.
+GBEAM FIX features the `ModWatcher` background service:
+1. Continuously monitors your `~/Downloads` directory.
+2. Waits for browser write completion (ignores `.crdownload`, `.tmp`, `.part`).
+3. Inspects internal archive signatures to confirm genuine BeamNG content (`vehicles/`, `levels/`, `art/`, etc.).
+4. Automatically unwraps nested wrapper folders and moves the `.zip` to `%LOCALAPPDATA%/BeamNG/BeamNG.drive/current/mods/`.
+5. **Immediately runs the full 7-stage repair pipeline on the fly**!
 
----
-
-## 🔊 Sound & Lua Crash Guard
-
-- **Pre-FMOD Audio Modernizer**: Older mods pointing to raw `.wav` files in `art/sound/*` crash the sound engine with `Audio: event not found`. GBEAM FIX modernizes sound paths to official BeamNG FMOD events (`event:>Engine>default`).
-- **Vehicle Lua Crash Guard**: Automatically guards legacy vehicle dashboard and gauge Lua scripts by injecting safety preambles for `v.data` and wrapping deprecated `obj:queueGameEngineLua` calls with defensive fallbacks.
+Activate via Menu option **`W`** or run standalone from terminal with **`--watch`**.
 
 ---
 
-## 🚀 Graphics & FPS Optimizer (Ultra Visuals + 60FPS Reflections)
+## 🚀 4 Tailored Graphics Presets
 
-Dynamic reflections in BeamNG update 6 cubemap faces every frame by default. On many systems, this drops frame rates by 30-50%!
+| Preset | Description | Target Hardware |
+|---|---|---|
+| **`ultra-max-fps`** (Default) | 100% Max Ultra: 1024px cubemaps, 4x shadows, 16x AF, smart 3-face reflection boost | High-end PCs / RTX / 2K-4K / Maximum visuals |
+| **`medium-60fps`** | Balanced 60 FPS sweet spot without microstutters | Mid-range gaming rigs |
+| **`low-weak`** | Entry-level GPU optimizations with reduced particles and shadows | Budget GPUs / GTX |
+| **`potato-ultra-weak`** | Extreme performance boost for integrated GPUs & weak laptops | iGPUs / Low-spec laptops |
 
-GBEAM FIX provides tailored, balanced presets:
-
-| Preset | Dynamic Reflections | Reflection TexSize | Dynamic Mirrors | Shadow Tuning | Target Hardware |
-|---|---|---|---|---|---|
-| **`ultra-max-fps`** (Default) | 3 faces / update | 1024 px (Full Ultra) | 1024 px (100% Ultra) | 4x Resolution, Soft Shadows, SSAO | High-end / RTX / 2K-4K / 0 Visual Degradation |
-| **`cinematic-fast`** | 2 faces / update | 512 px | 512 px (1 face) | Soft High, balanced cascades | High-end / 60-144 FPS smooth |
-| **`balanced`** | 2 faces / update | 512 px | 512 px (1 face) | High, standard decals | Mid-range PCs |
-| **`performance`** | Off / 1 face | 256 px | 256 px | Normal shadows, optimized grass | Budget / Laptops |
-
-- **Automatic Backup**: Creates timestamped `.bak` copies in your settings folder before touching anything.
-- **Easy Restore**: Restore original settings with one keypress from the interactive menu.
+Automatic `.bak` backups are created in `settings/` before any change and can be restored in 1 click.
 
 ---
 
-## 📁 High-Performance Automatic Path Discovery & Caching
+## 🖥️ Interactive Terminal Menu
 
-GBEAM FIX automatically and instantly finds your BeamNG.drive installation, even on customized multi-drive configurations, secondary game SSDs, or portable setups:
-
-1. **AppData Version Topology**: Automatically scans `%LOCALAPPDATA%\BeamNG\BeamNG.drive\` across all version subdirectories (`current`, `latest`, `0.34`, `0.33`, `0.32`, `0.31`, `0.30`, etc.), intelligently scoring and picking the most active folder (favoring folders with active mod archives, recent game launch logs like `beamng.log`, and newest modification time).
-2. **Windows Registry Steam Discovery**: Queries `HKCU\Software\Valve\Steam` and `HKLM\SOFTWARE\Valve\Steam` to locate Steam, parses `libraryfolders.vdf` across all installed library drives for Steam App ID `284160`, inspects `appmanifest_284160.acf` for exact `installdir`, and parses `startup.ini` for custom `UserPath` redirections.
-3. **Multi-Drive Scanning**: Windows native sub-millisecond logical drive bitmask enumeration (`GetLogicalDrives`) with optical/CD-ROM filtering and error suppression, rapidly searching game paths on secondary drives (`D:\`, `E:\`, `F:\`... `BeamNG.drive`, `Games\BeamNG.drive`, `SteamLibrary`).
-4. **0ms Instant Persistent Cache**: Saves verified paths to `%LOCALAPPDATA%\BeamNGModFixer\config.json` (or `~/.beamng_fixer_paths.json`) with atomic `.tmp` swap. Subsequent runs resolve paths in **0ms** without re-scanning.
-5. **Interactive Management & CLI Overrides**: View, customize, or validate directories via Menu Option `[9]` or via CLI flags (`-u`, `--user-dir`, `-m`, `--mods-dir`, `--show-paths`, `--save-paths`).
-
----
-
-## 🖥️ Interactive Hierarchical Menu
-
-Run `agy-gbeam-fix` without arguments in an interactive terminal to enter the full control suite:
+Run `agy-gbeam-fix`:
 
 ```text
 MAIN CONTROL MENU (ГЛАВНОЕ МЕНЮ):
-  [1] 🚀 ГЛОБАЛЬНЫЙ ФИКС В 1 КЛИК (1-Click Global Fix) (Оптика + Текстуры + Физика + Звук + Lua + Графика + Кэш)
-  [2] 💡 Headlights & Optics Studio (Smart Fix, Angle repair, cookie modernizer)
-  [3] 🎨 Materials & Texture Doctor (Fix NO TEXTURE, materials.cs -> 1.5 JSON, VFS paths)
-  [4] ⚙️ Drivetrain & Physics Repair (Fix frozen cars, differential explosion, tire PSI)
-  [5] 🔊 Sound & Lua Crash Guard (Modernize FMOD audio, patch obsolete lua APIs)
-  [6] 🚀 Graphics & FPS Optimizer (Cinematic-Fast, Balanced, Maximum-FPS presets)
-  [7] 🧹 Cache & Diagnostics Purge (DirectX/Vulkan shaders, vehicle binaries, temp files)
-  [8] 📋 Deep Mod Health Audit (Safe non-modifying dry-run scan with report)
-  [9] 📁 Change / View BeamNG Directory & Paths (Multi-drive auto-detection & path validator)
-  [0] 🚪 Exit
+  1. 🚀 1-Click Global Fix (Optics + Textures + Physics + Audio + Lua + Graphics + Cache)
+  2. 💡 Headlights & Optics Studio (Low/high beam balance, angle repair, cookie modernizer)
+  3. 🎨 Materials & Texture Doctor (Fix NO TEXTURE, materials.cs -> 1.5 JSON, VFS paths)
+  4. ⚙️ Drivetrain & Physics Repair (Fix frozen cars, differential explosion, tire PSI)
+  5. 🔊 Sound & Lua Crash Guard (Modernize FMOD audio, guard deprecated lua APIs)
+  6. 🚀 Graphics & FPS Optimizer (Ultra-Max-FPS, 60FPS-Balanced, Low, Potato presets)
+  7. 🧹 Cache & Diagnostics Purge (DirectX/Vulkan shaders, vehicle binaries, temp files)
+  8. 📋 Deep Mod Health Audit (Safe non-modifying dry-run scan with report)
+  9. 📁 BeamNG Directory & Paths (Auto-detection & path validator across drives)
+  W. ⚡ Mod Auto-Installer & Downloads Watcher
+  L. 🌐 Change Language / Сменить язык (English / Русский)
+  0. 🚪 Exit
 ```
 
-- **Unified 1-Click Pipeline (Option [1])**: Executes all 7 repair and optimization stages in one seamless pipeline: Headlights & Optics, Materials Doctor, Drivetrain & JBeam Physics, Sound Modernizer, Lua Safety Guard, Cinematic-Fast Graphics Preset, and DirectX/Vulkan Shader Cache Purge. Complete status and freed disk space are reported in real time.
-- **Two-Way Studio Navigation**: Executing any repair pass automatically transitions to the **Fix Results & Diagnostic Studio**, displaying live metric counters, detailed file-by-file notices, and instant 1-click return (`[1]` or Enter) to the Main Control Menu.
-- **Adaptive Multi-Pass Engine**: Automatically applies fallback heuristics if non-standard mod configurations or conflicting definitions are detected, guaranteeing a 100% playable vehicle state.
+- **1-Click Global Fix (Option 1)**: Runs all 7 repair stages, optimizes graphics, and clears cache. Opens the **Post-Fix Results Studio**, and option `1` or `Enter` returns cleanly to the Main Menu.
+- **Language Toggle (Option L)**: Instantly toggles between English and Russian, persisted in `~/.beamng_mod_fixer/config.json`.
+- **Clean Typography**: Bracket-free design without bracket spam.
 
 ---
 
-## 🛠️ Command-Line Arguments & Automation
-
-For headless execution, server scripts, or batch operations:
+## 🛠️ CLI Usage & Flags
 
 ```bash
-# 1-Click Global Fix (All 7 repairs + graphics + cache)
+# 1-Click Global Fix (All 7 repair stages + graphics + cache clean)
 agy-gbeam-fix --all
 
-# Display detected BeamNG paths, status, and mod count
+# Launch background Downloads watcher for automatic installation and repair
+agy-gbeam-fix --watch
+
+# Select interface language
+agy-gbeam-fix --lang en
+agy-gbeam-fix --lang ru
+
+# Deploy graphics preset
+agy-gbeam-fix --optimize-graphics --preset ultra-max-fps
+agy-gbeam-fix --optimize-graphics --preset medium-60fps
+agy-gbeam-fix --optimize-graphics --preset potato-ultra-weak
+
+# Display detected paths and active status
 agy-gbeam-fix --show-paths
 
-# Save custom directory configuration permanently to 0ms persistent cache
-agy-gbeam-fix --mods-dir "D:/BeamNG_Mods" --save-paths
-
-# Specify custom BeamNG user data directory
-agy-gbeam-fix --user-dir "%LOCALAPPDATA%/BeamNG/BeamNG.drive/0.34" --all
-
-# Specify custom mods folder override
-agy-gbeam-fix --mods-dir "D:/BeamNG_Mods" --all
-
-# Fix mods only (Headlights, Materials, Drivetrain, Sounds, Lua)
-agy-gbeam-fix --fix-mods
-
-# Materials & Texture Doctor only
-agy-gbeam-fix --fix-materials
-
-# Drivetrain & Physics Repair only
-agy-gbeam-fix --fix-drivetrain
-
-# Deploy Ultra-Max-FPS graphics preset (Maximum Ultra visuals + smart FPS boost)
-agy-gbeam-fix --optimize-graphics --preset ultra-max-fps
-
-# Safely purge compiled shader cache (.d3dcsx, .db)
+# Purge shader caches (.d3dcsx, .db)
 agy-gbeam-fix --clean-cache
 
-# Non-destructive dry-run preview
+# Safe non-modifying simulation (Dry Run)
 agy-gbeam-fix --all --dry-run
 ```
 
 ---
 
-## 🧪 Comprehensive Automated Test Suite
+## 🧪 273 Automated Quality Tests
 
-GBEAM FIX is rigorously verified by **251 hermetic automated tests** across five testing tiers:
+Backed by a rigorous test suite of **273 automated tests** across 5 tiers:
 
 ```bash
 python -m pytest -v
 ```
 
-- **Tier 1 (Feature)**: Regex pattern testing, materials conversion, drivetrain clamps, sound modernizer, path resolver & persistent cache, UI menu transitions, shader cache cleaner, graphics optimizer.
-- **Tier 2 (Boundary)**: Corrupted ZIP headers, 0-byte archives, UTF-8 BOM encoding, file lock handling, encrypted archive protection.
-- **Tier 3 (Combination)**: Atomic in-place file rewrites, binary asset passthrough SHA-256 integrity, batch scanner aggregation.
-- **Tier 4 (Workload)**: End-to-end CLI subprocess executions, path overrides, help/version flags, dry-run guarantees.
-- **Tier 5 (Adversarial)**: Malformed JBeam brackets, escaped quotes, infinite loop resistance.
+- Verification of rear light calibration, template inheritance isolation, and quadratic attenuation falloff.
+- Verification of nested wrapper unwrapping and VFS separator normalization.
+- Verification of background `ModWatcher` file stability and auto-repair.
+- Full adversarial robustness against corrupt, locked, password-protected, and 6MB+ JBeam files.
 
 ---
 
 ## 📄 License
 
-Distributed under the **MIT License**. See [LICENSE](LICENSE) for full details.
-Contributions and pull requests welcome!
+Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
+Enjoy driving in BeamNG.drive!

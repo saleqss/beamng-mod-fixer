@@ -1,22 +1,33 @@
-"""Rear lighting repair and ground illumination engine for BeamNG.drive.
+"""Rear lighting repair and photographic ground illumination engine for BeamNG.drive.
 
 Provides:
 - Detection of rear lighting fixtures (reverse, brake, taillight, running, signal, fog).
 - Repair of JBeam syntax defects in rear light blocks:
   * Missing commas after cookieName before texSize.
   * Missing commas between beam definition rows ('] \n [') and dicts ('} \n [').
+- Elimination of the "Blinding White Rear Light" bug:
+  * In JBeam props, rows inherit unspecified properties from preceding templates.
+  * If a reverse light template sets lightColor: white, subsequent taillight / lowhighbeam
+    rows inherit white if lightColor is omitted!
+  * This engine injects explicit, calibrated lightColor into every rear spotlight row:
+    - Pure vivid red for brake, taillight, running, and rear fog.
+    - Warm white for reverse lights.
+    - Crisp amber for turn signals.
+- Elimination of the "Nuclear-Bright Red Ground Discs" bug:
+  * Calibrates lightBrightness and lightRange to realistic, subtle photographic levels:
+    - Taillights / Running: brightness 0.12, range 6.0m (soft diffuse ambient road wash).
+    - Brake lights: brightness 0.35, range 9.0m (clear braking bloom without road laser discs).
+    - Reverse lights: brightness 0.75, range 13.0m (clean white reversing visibility).
+    - Turn signals: brightness 0.40, range 8.0m.
+    - Rear fog lights: brightness 0.45, range 10.0m.
+  * Enforces quadratic lightAttenuation ({"x": 0, "y": 1, "z": 2}) for smooth, natural falloff.
 - Removal of inappropriate directional headlight cookie textures from rear lamps.
-- Ground illumination boost for dim spotlights:
-  * Reverse lights: brightness boosted to 1.2, range expanded to 16.0m (bright white ground wash).
-  * Brake lights: brightness boosted to 0.85, range expanded to 14.0m (vivid red road wash).
-  * Taillights / Running / Low beam rear: brightness boosted to 0.35, range expanded to 12.0m.
-  * Turn signals: brightness boosted to 0.6, range expanded to 12.0m.
-  * Fog lights: brightness boosted to 0.75, range expanded to 14.0m.
-- Disabling self-shadow casting (lightCastShadows: false) to prevent bumper self-occlusion.
+- Disabling self-shadow casting (lightCastShadows: false) to prevent rear bumper occlusion.
 """
 
+import json
 import re
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from beamng_mod_fixer.models import DiagnosticNotice
 
@@ -89,7 +100,12 @@ def enhance_rear_light_content(
     content: str,
     filename: str = "",
 ) -> Tuple[str, int, List[DiagnosticNotice]]:
-    """Audit and enhance rear lighting to provide realistic ground and environmental illumination.
+    """Audit and calibrate rear lighting for photographic, realistic ground illumination.
+
+    Eliminates:
+    1. White light on rear lights when headlights are turned on (template inheritance bug).
+    2. Blinding, nuclear-bright red ground discs (calibrates brightness & adds quadratic attenuation).
+    3. Bumper shadow occlusion (lightCastShadows: false).
 
     Args:
         content: Raw JBeam text content.
@@ -156,27 +172,43 @@ def enhance_rear_light_content(
 
         text = RE_HEADLIGHT_COOKIE_IN_REAR.sub(_clear_cookie, text)
 
-    # 4. Boost template lightRange in rear files if < 10.0m
+    # 4. Calibrate template lightRange in rear files if < 8.0m or > 15.0m
     if is_rear:
         def _boost_template_range(m: re.Match) -> str:
             nonlocal fixes
             val = float(m.group(2))
-            if val < 10.0:
+            if val < 8.0:
                 fixes += 1
                 diagnostics.append(
                     DiagnosticNotice(
                         severity="info",
-                        message=f"Boosted rear light template lightRange from {val}m to 14.0m for realistic road throw",
+                        message=f"Calibrated rear light template lightRange from {val}m to 10.0m",
                         file_path=filename,
                         rule="rear_template_range_boosted",
                     )
                 )
-                return f"{m.group(1)}14.0"
-            return m.group(0)
+                return f"{m.group(1)}10.0"
+            elif val > 15.0:
+                fixes += 1
+                diagnostics.append(
+                    DiagnosticNotice(
+                        severity="info",
+                        message=f"Calibrated excessive rear template lightRange from {val}m down to 12.0m",
+                        file_path=filename,
+                        rule="rear_template_range_calibrated",
+                    )
+                )
+                return f"{m.group(1)}12.0"
+        # Only calibrate templates (lines without SPOTLIGHT)
+        temp_lines = text.splitlines(keepends=True)
+        text = "".join(
+            RE_TEMPLATE_LIGHT_RANGE.sub(_boost_template_range, l)
+            if "SPOTLIGHT" not in l
+            else l
+            for l in temp_lines
+        )
 
-        text = RE_TEMPLATE_LIGHT_RANGE.sub(_boost_template_range, text)
-
-    # 5. Process SPOTLIGHT rows: boost brightness and range per function
+    # 5. Process SPOTLIGHT rows: calibrate brightness, range, attenuation, and color
     lines = text.splitlines(keepends=True)
     new_lines = []
 
@@ -186,89 +218,207 @@ def enhance_rear_light_content(
             target_brightness: Optional[float] = None
             target_range: Optional[float] = None
             category: Optional[str] = None
+            target_color_str: Optional[str] = None
+            target_attenuation_str: Optional[str] = None
 
             if "reverse" in line_lower:
-                target_brightness = 1.2
-                target_range = 16.0
-                category = "reverse light"
-            elif any(k in line_lower for k in ("brake", "brakelights", "brakelight")):
-                target_brightness = 0.85
-                target_range = 14.0
-                category = "brake light"
-            elif any(k in line_lower for k in ("signal_l", "signal_r", "turnsignal")):
-                target_brightness = 0.6
-                target_range = 12.0
-                category = "turn signal"
-            elif any(k in line_lower for k in ("fog", "rearfog")) and (is_rear or "rear" in line_lower):
                 target_brightness = 0.75
-                target_range = 14.0
-                category = "rear fog light"
-            elif any(k in line_lower for k in ("lowhighbeam", "running", "taillight", "taillights")) and (is_rear or "rear" in line_lower):
+                target_range = 13.0
+                category = "reverse light"
+                target_color_str = '"lightColor": {"r": 255, "g": 250, "b": 220, "a": 255}'
+                target_attenuation_str = '"lightAttenuation": {"x": 0, "y": 1, "z": 1.5}'
+            elif any(k in line_lower for k in ("brake", "brakelights", "brakelight")):
                 target_brightness = 0.35
-                target_range = 12.0
+                target_range = 9.0
+                category = "brake light"
+                target_color_str = '"lightColor": {"r": 255, "g": 20, "b": 20, "a": 255}'
+                target_attenuation_str = '"lightAttenuation": {"x": 0, "y": 1, "z": 2}'
+            elif any(k in line_lower for k in ("signal_l", "signal_r", "turnsignal")):
+                target_brightness = 0.40
+                target_range = 8.0
+                category = "turn signal"
+                target_color_str = '"lightColor": {"r": 255, "g": 140, "b": 15, "a": 255}'
+                target_attenuation_str = '"lightAttenuation": {"x": 0, "y": 1, "z": 2}'
+            elif any(k in line_lower for k in ("fog", "rearfog")) and (is_rear or "rear" in line_lower):
+                target_brightness = 0.45
+                target_range = 10.0
+                category = "rear fog light"
+                target_color_str = '"lightColor": {"r": 255, "g": 20, "b": 20, "a": 255}'
+                target_attenuation_str = '"lightAttenuation": {"x": 0, "y": 1, "z": 2}'
+            elif any(k in line_lower for k in ("lowhighbeam", "running", "taillight", "taillights")) and (is_rear or "rear" in line_lower):
+                target_brightness = 0.12
+                target_range = 6.0
                 category = "taillight / running light"
+                target_color_str = '"lightColor": {"r": 255, "g": 20, "b": 20, "a": 255}'
+                target_attenuation_str = '"lightAttenuation": {"x": 0, "y": 1, "z": 2}'
 
             if target_brightness is not None:
-                # Check current lightBrightness
-                m_b = re.search(r'(["\']lightBrightness["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', line)
-                if m_b:
-                    cur_b = float(m_b.group(2))
-                    if cur_b < (target_brightness * 0.7):
+                # Find inline dictionary in the SPOTLIGHT row
+                dict_match = re.search(r'\{([^{}]+)\}', line)
+                if dict_match:
+                    dict_body = dict_match.group(1)
+                    modified_dict = dict_body
+
+                    # 5a. Explicit lightColor Injection / Correction:
+                    # Prevents inheriting white color from preceding reverse light templates!
+                    # And fixes copy-pasted white colors on rear taillight/brake rows.
+                    m_col = re.search(r'(?i)(["\']lightColor["\']\s*:\s*\{[^{}]+\})', modified_dict)
+                    if not m_col:
+                        # Missing explicit color: inject target color to stop template inheritance!
+                        modified_dict = f"{target_color_str}, {modified_dict}"
                         fixes += 1
                         diagnostics.append(
                             DiagnosticNotice(
                                 severity="info",
-                                message=f"Boosted {category} lightBrightness from {cur_b} to {target_brightness} for ground illumination",
+                                message=f"Injected explicit {category} lightColor to prevent inheriting white reverse light template",
+                                file_path=filename,
+                                rule="rear_color_inheritance_prevented",
+                            )
+                        )
+                    else:
+                        # Color is present: check if a taillight or brake row erroneously has white light
+                        col_str = m_col.group(1).lower()
+                        if category in ("brake light", "taillight / running light", "rear fog light"):
+                            # Check if white/yellowish (e.g. high green and blue)
+                            m_rgb = re.search(r'["\']r["\']\s*:\s*(\d+).*?["\']g["\']\s*:\s*(\d+).*?["\']b["\']\s*:\s*(\d+)', col_str)
+                            if m_rgb:
+                                r_val, g_val, b_val = int(m_rgb.group(1)), int(m_rgb.group(2)), int(m_rgb.group(3))
+                                if g_val > 120 and b_val > 120 and r_val > 180:
+                                    # Erroneous white rear lamp! Replace with red!
+                                    modified_dict = modified_dict[:m_col.start()] + target_color_str + modified_dict[m_col.end():]
+                                    fixes += 1
+                                    diagnostics.append(
+                                        DiagnosticNotice(
+                                            severity="info",
+                                            message=f"Repaired erroneous white lightColor in {category} to proper red",
+                                            file_path=filename,
+                                            rule="rear_white_light_fixed",
+                                        )
+                                    )
+
+                    # 5b. Explicit lightAttenuation Injection (smooth photographic falloff)
+                    if "lightattenuation" not in modified_dict.lower():
+                        modified_dict = f"{target_attenuation_str}, {modified_dict}"
+                        fixes += 1
+                        diagnostics.append(
+                            DiagnosticNotice(
+                                severity="info",
+                                message=f"Injected quadratic lightAttenuation to {category} for soft natural road wash without hard circular discs",
+                                file_path=filename,
+                                rule="rear_attenuation_softened",
+                            )
+                        )
+
+                    # 5c. Calibrate lightBrightness
+                    m_b = re.search(r'(["\']lightBrightness["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', modified_dict)
+                    if m_b:
+                        cur_b = float(m_b.group(2))
+                        # If too dim, boost to target
+                        if cur_b < (target_brightness * 0.7):
+                            fixes += 1
+                            diagnostics.append(
+                                DiagnosticNotice(
+                                    severity="info",
+                                    message=f"Boosted dim {category} lightBrightness from {cur_b} to {target_brightness}",
+                                    file_path=filename,
+                                    rule="rear_brightness_boosted",
+                                )
+                            )
+                            modified_dict = modified_dict[:m_b.start()] + f'{m_b.group(1)}{target_brightness}' + modified_dict[m_b.end():]
+                        # If over-boosted (causing nuclear glare), calibrate down
+                        elif cur_b > (target_brightness * 1.6):
+                            fixes += 1
+                            diagnostics.append(
+                                DiagnosticNotice(
+                                    severity="info",
+                                    message=f"Calibrated over-bright {category} lightBrightness from {cur_b} down to {target_brightness} to eliminate blinding glare",
+                                    file_path=filename,
+                                    rule="rear_brightness_calibrated",
+                                )
+                            )
+                            modified_dict = modified_dict[:m_b.start()] + f'{m_b.group(1)}{target_brightness}' + modified_dict[m_b.end():]
+                    else:
+                        # Missing brightness: inject target brightness
+                        modified_dict = f'"lightBrightness": {target_brightness}, {modified_dict}'
+                        fixes += 1
+                        diagnostics.append(
+                            DiagnosticNotice(
+                                severity="info",
+                                message=f"Added calibrated lightBrightness: {target_brightness} to {category}",
                                 file_path=filename,
                                 rule="rear_brightness_boosted",
                             )
                         )
-                        line = line[:m_b.start()] + f'{m_b.group(1)}{target_brightness}' + line[m_b.end():]
 
-                # Check current lightRange
-                m_r = re.search(r'(["\']lightRange["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', line)
-                if m_r:
-                    cur_r = float(m_r.group(2))
-                    if cur_r < target_range:
+                    # 5d. Calibrate lightRange
+                    m_r = re.search(r'(["\']lightRange["\']\s*:\s*)([0-9]+(?:\.[0-9]+)?)', modified_dict)
+                    if m_r:
+                        cur_r = float(m_r.group(2))
+                        if cur_r < (target_range * 0.7):
+                            fixes += 1
+                            diagnostics.append(
+                                DiagnosticNotice(
+                                    severity="info",
+                                    message=f"Extended short {category} lightRange from {cur_r}m to {target_range}m",
+                                    file_path=filename,
+                                    rule="rear_range_extended",
+                                )
+                            )
+                            modified_dict = modified_dict[:m_r.start()] + f'{m_r.group(1)}{target_range}' + modified_dict[m_r.end():]
+                        elif cur_r > (target_range * 1.25):
+                            fixes += 1
+                            diagnostics.append(
+                                DiagnosticNotice(
+                                    severity="info",
+                                    message=f"Calibrated excessive {category} lightRange from {cur_r}m down to {target_range}m",
+                                    file_path=filename,
+                                    rule="rear_range_calibrated",
+                                )
+                            )
+                            modified_dict = modified_dict[:m_r.start()] + f'{m_r.group(1)}{target_range}' + modified_dict[m_r.end():]
+                    else:
+                        modified_dict = f'"lightRange": {target_range}, {modified_dict}'
                         fixes += 1
                         diagnostics.append(
                             DiagnosticNotice(
                                 severity="info",
-                                message=f"Extended {category} lightRange from {cur_r}m to {target_range}m",
+                                message=f"Added explicit lightRange: {target_range}m to {category}",
                                 file_path=filename,
                                 rule="rear_range_extended",
                             )
                         )
-                        line = line[:m_r.start()] + f'{m_r.group(1)}{target_range}' + line[m_r.end():]
-                elif m_b and category == "reverse light":
-                    fixes += 1
-                    diagnostics.append(
-                        DiagnosticNotice(
-                            severity="info",
-                            message=f"Added explicit lightRange: {target_range}m to {category}",
-                            file_path=filename,
-                            rule="rear_range_extended",
-                        )
-                    )
-                    line = line[:m_b.start()] + f'"lightRange": {target_range}, ' + line[m_b.start():]
 
-                # Ensure lightCastShadows is false for rear lights
-                if '"lightcastshadows":true' in line.lower().replace(" ", ""):
-                    fixes += 1
-                    diagnostics.append(
-                        DiagnosticNotice(
-                            severity="info",
-                            message=f"Disabled self-shadow casting on {category} to prevent rear bumper occlusion",
-                            file_path=filename,
-                            rule="rear_shadow_occlusion_disabled",
+                    # 5e. Ensure lightCastShadows is false for all rear lights
+                    if '"lightcastshadows":true' in modified_dict.lower().replace(" ", ""):
+                        fixes += 1
+                        diagnostics.append(
+                            DiagnosticNotice(
+                                severity="info",
+                                message=f"Disabled self-shadow casting on {category} to prevent rear bumper occlusion",
+                                file_path=filename,
+                                rule="rear_shadow_occlusion_disabled",
+                            )
                         )
-                    )
-                    line = re.sub(
-                        r'(["\']lightCastShadows["\']\s*:\s*)true\b',
-                        r'\g<1>false',
-                        line,
-                        flags=re.IGNORECASE,
-                    )
+                        modified_dict = re.sub(
+                            r'(["\']lightCastShadows["\']\s*:\s*)true\b',
+                            r'\g<1>false',
+                            modified_dict,
+                            flags=re.IGNORECASE,
+                        )
+                    elif "lightcastshadows" not in modified_dict.lower():
+                        modified_dict = f'"lightCastShadows": false, {modified_dict}'
+                        fixes += 1
+                        diagnostics.append(
+                            DiagnosticNotice(
+                                severity="info",
+                                message=f"Added explicit lightCastShadows: false to {category}",
+                                file_path=filename,
+                                rule="rear_shadow_occlusion_disabled",
+                            )
+                        )
+
+                    if modified_dict != dict_body:
+                        line = line[:dict_match.start()] + "{" + modified_dict + "}" + line[dict_match.end():]
 
         new_lines.append(line)
 

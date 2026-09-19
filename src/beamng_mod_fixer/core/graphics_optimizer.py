@@ -388,6 +388,76 @@ OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# Alias and add distinct preset tiers
+OPTIMIZATION_PRESETS["medium-60fps"] = OPTIMIZATION_PRESETS["balanced"]
+OPTIMIZATION_PRESETS["low-weak"] = OPTIMIZATION_PRESETS["performance"]
+OPTIMIZATION_PRESETS["potato-ultra-weak"] = {
+    "settings": {
+        "GraphicOverallQuality": "Lowest",
+        "GraphicLightingQuality": "Lowest",
+        "GraphicClusteredQuality": "Lowest",
+        "GraphicMeshQuality": "Lowest",
+        "GraphicShadowQuality": "Lowest",
+        "GraphicShadowsQuality": "Lowest",
+        "GraphicDisableShadows": "1",
+        "GraphicTerrainQuality": "Lowest",
+        "GraphicCloudsQuality": "Lowest",
+        "GraphicTextureQuality": "Lowest",
+        "GraphicAnisotropic": 0,
+        "GraphicAntialias": 0,
+        "GraphicAntialiasType": "none",
+        "GraphicGrassDensity": 0.0,
+        "GraphicMaxDecalCount": 500,
+        "GraphicDynReflection": False,
+        "GraphicDynReflectionEnabled": False,
+        "GraphicDynReflectionFacesPerupdate": 1,
+        "GraphicDynReflectionTexsize": 0,
+        "GraphicDynReflectionDistance": 50,
+        "GraphicDynReflectionDetail": 0.25,
+        "GraphicDynMirrorsEnabled": False,
+        "PostFXSSAOGeneralEnabled": False,
+        "PostFXScreenSpaceShadowsEnabled": False,
+        "PostFXLightRaysEnabled": False,
+        "PostFXDOFGeneralEnabled": False,
+        "PostFXMotionBlurEnabled": False,
+    },
+    "game_settings": {
+        "Video": {
+            "textureReductionLevel": 2,
+            "defaultAnisotropy": 0,
+        },
+        "BeamNGVehicle": {
+            "dynamicReflection": {
+                "enabled": False,
+                "facesPerUpdate": 1,
+                "textureSize": 128,
+                "detail": 0.25,
+                "distance": 50,
+            },
+            "dynamicMirrors": {
+                "enabled": False,
+            },
+        },
+        "Shadows": {
+            "disable": 1,
+            "textureScalar": 1,
+            "filterMode": 0,
+        },
+        "TS": {
+            "maxDecalCount": 500,
+            "detailAdjust": 0.5,
+        },
+        "Decals": {
+            "enabled": False,
+        },
+        "Reflect": {
+            "maxLights": 8,
+            "deferredLighting": False,
+            "depthPrepass": False,
+        },
+    },
+}
+
 
 # ==============================================================================
 # Helper Functions

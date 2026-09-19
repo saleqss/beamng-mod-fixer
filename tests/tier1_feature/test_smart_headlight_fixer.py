@@ -304,3 +304,21 @@ def test_smart_headlight_base_game_cookie_with_leading_slash_not_flagged_missing
     assert not any(d.rule == "cookie_missing_replaced" for d in diags)
 
 
+def test_enhance_weak_highbeam_range_and_brightness():
+    """Verify that weak highbeams (e.g. range 50m, brightness 0.7) are boosted to 120m and 2.2."""
+    jbeam = '''{
+        "spotlights": [
+            {"flareName": "vehicleHeadLightFlare", "lightRange": 50, "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]],
+            {"flareName": "vehicleHighBeamFlare", "lightRange": 45, "lightBrightness": 0.8, "lightCastShadows": true},
+            ["highbeam", ["d", "e", "f"]]
+        ]
+    }'''
+    fixed, count, diags = smart_fix_jbeam_content(jbeam)
+    assert '"lightRange": 120.0' in fixed
+    assert '"lightBrightness": 2.2' in fixed
+    assert any(d.rule == "highbeam_range_boosted" for d in diags)
+    assert any(d.rule == "highbeam_brightness_boosted" for d in diags)
+
+
+

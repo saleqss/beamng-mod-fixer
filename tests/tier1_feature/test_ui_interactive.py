@@ -265,3 +265,46 @@ def test_interactive_cli_summary_report_with_pipeline_status(capsys: pytest.Capt
     assert "DirectX/Vulkan cache purge" in out
 
 
+def test_interactive_cli_language_toggle(tmp_path: Path) -> None:
+    """Test toggling language via 'L' from main menu."""
+    from beamng_mod_fixer.i18n import get_current_language, set_language
+    set_language("en")
+    assert get_current_language() == "en"
+
+    paths = {
+        "user_dir": tmp_path,
+        "mods_dir": tmp_path / "mods",
+        "settings_dir": tmp_path / "settings",
+        "cache_dir": tmp_path / "temp",
+    }
+    cli = InteractiveCLI(paths=paths, dry_run=True)
+    # Press "L" then "0" to exit
+    with mock.patch("builtins.input", side_effect=["L", "0"]):
+        cli.run_main_menu()
+
+    assert get_current_language() == "ru"
+
+
+def test_interactive_cli_mod_watcher_menu(tmp_path: Path) -> None:
+    """Test navigating mod watcher submenu options (start, scan, recent, stop, return)."""
+    paths = {
+        "user_dir": tmp_path,
+        "mods_dir": tmp_path / "mods",
+        "settings_dir": tmp_path / "settings",
+        "cache_dir": tmp_path / "temp",
+    }
+    cli = InteractiveCLI(paths=paths, dry_run=True)
+
+    # Sequence of watcher menu actions:
+    # 1: start watcher
+    # 3: scan now
+    # 4: view recent log (press enter)
+    # 2: stop watcher
+    # 0: return to main menu
+    with mock.patch("builtins.input", side_effect=["1", "3", "4", "", "2", "0"]):
+        cli.menu_mod_watcher()
+
+    assert not cli.watcher.is_running
+
+
+

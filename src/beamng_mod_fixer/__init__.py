@@ -10,7 +10,7 @@ A high-performance Python utility and community engine for BeamNG.drive that fix
 - 60FPS fast reflections, soft shadows, and shader cache cleaning
 """
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 __author__ = "BeamNG Modding Tools Team"
 
 from beamng_mod_fixer.core.cache_cleaner import clean_shader_cache
@@ -35,6 +35,7 @@ from beamng_mod_fixer.core.materials_fixer import (
     fix_materials_json_content,
     parse_materials_cs,
 )
+from beamng_mod_fixer.core.mod_watcher import ModWatcher
 from beamng_mod_fixer.core.path_resolver import (
     clear_cached_paths,
     detect_beamng_user_dir,

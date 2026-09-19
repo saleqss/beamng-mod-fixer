@@ -118,6 +118,54 @@ def _check_local_crc_integrity(zf: zipfile.ZipFile) -> Optional[str]:
     return None
 
 
+BEAMNG_ROOT_CATEGORIES = (
+    "vehicles/",
+    "levels/",
+    "art/",
+    "ui/",
+    "track/",
+    "scenarios/",
+    "campaigns/",
+    "scripts/",
+    "sound/",
+    "mods/",
+)
+
+
+def detect_nested_mod_prefix(filenames: List[str]) -> Optional[str]:
+    """Check if all significant files in the archive are wrapped in a single redundant root directory.
+
+    e.g. if files are:
+    'CoolCar_v2/vehicles/coolcar/coolcar.jbeam'
+    'CoolCar_v2/vehicles/coolcar/materials.json'
+    Then 'CoolCar_v2/' is stripped so 'vehicles/' is at the root.
+    """
+    meaningful = [
+        f.replace("\\", "/")
+        for f in filenames
+        if not f.startswith("__MACOSX/")
+        and not f.endswith(".DS_Store")
+        and not f.endswith("Thumbs.db")
+        and not f.endswith("/")
+    ]
+    if not meaningful:
+        return None
+
+    parts = [f.split("/", 1) for f in meaningful if "/" in f]
+    if len(parts) != len(meaningful):
+        return None
+
+    first_dirs = {p[0] for p in parts}
+    if len(first_dirs) == 1:
+        prefix = list(first_dirs)[0] + "/"
+        # Check if the subpath starts with one of BeamNG's standard root categories
+        subpaths = [f[len(prefix):] for f in meaningful]
+        if any(any(sub.lower().startswith(cat) for cat in BEAMNG_ROOT_CATEGORIES) for sub in subpaths):
+            return prefix
+
+    return None
+
+
 def process_mod_archive(
     archive_path: Path,
     dry_run: bool = False,
@@ -226,7 +274,34 @@ def process_mod_archive(
                 return report
 
             entries = zf.infolist()
-            available_filenames = {e.filename for e in entries}
+            entry_filenames = [e.filename.replace("\\", "/") for e in entries]
+            nested_prefix = detect_nested_mod_prefix(entry_filenames)
+            has_backslashes = any("\\" in e.filename for e in entries)
+
+            if nested_prefix:
+                report.diagnostics.append(
+                    DiagnosticNotice(
+                        severity="info",
+                        message=f"Unwrapped redundant root folder '{nested_prefix}' so BeamNG mounts mod files correctly",
+                        file_path=str(archive_path),
+                        rule="archive_nested_folder_unwrapped",
+                    )
+                )
+
+            if has_backslashes:
+                report.diagnostics.append(
+                    DiagnosticNotice(
+                        severity="info",
+                        message="Normalized Windows backslashes '\\' to forward slashes '/' in archive entry paths",
+                        file_path=str(archive_path),
+                        rule="archive_path_separators_normalized",
+                    )
+                )
+
+            available_filenames = {
+                (e.filename[len(nested_prefix):] if nested_prefix and e.filename.replace("\\", "/").startswith(nested_prefix) else e.filename).replace("\\", "/")
+                for e in entries
+            }
 
             for entry in entries:
                 entry_name_lower = entry.filename.lower()
@@ -450,6 +525,8 @@ def process_mod_archive(
         + report.lua_fixed
         + report.junk_cleaned
         + len(added_files)
+        + (1 if nested_prefix else 0)
+        + (1 if has_backslashes else 0)
     )
 
     if total_modifications == 0:
@@ -478,11 +555,21 @@ def process_mod_archive(
                         # Skip deleted junk entries
                         continue
 
+                    # Compute target unwrapped and normalized filename
+                    clean_name = entry.filename.replace("\\", "/")
+                    if nested_prefix and clean_name.startswith(nested_prefix):
+                        dest_filename = clean_name[len(nested_prefix):]
+                    else:
+                        dest_filename = clean_name
+
+                    if not dest_filename or dest_filename == "/":
+                        continue
+
                     if entry.filename in modified_files:
                         # Write patched text data preserving metadata and UTF-8 flags
                         new_data = modified_files[entry.filename]
                         new_info = zipfile.ZipInfo(
-                            entry.filename, date_time=entry.date_time
+                            dest_filename, date_time=entry.date_time
                         )
                         new_info.create_system = entry.create_system
                         new_info.flag_bits = entry.flag_bits
@@ -490,18 +577,29 @@ def process_mod_archive(
                         new_info.comment = entry.comment
                         new_info.external_attr = entry.external_attr
                         dst_zf.writestr(new_info, new_data)
-                        written_names.add(entry.filename)
+                        written_names.add(dest_filename)
                     else:
                         # Stream non-modified entries (DDS, DAE, WAV, etc.) byte-for-byte
                         entry_bytes = src_zf.read(entry.filename)
-                        dst_zf.writestr(entry, entry_bytes)
-                        written_names.add(entry.filename)
+                        new_info = zipfile.ZipInfo(
+                            dest_filename, date_time=entry.date_time
+                        )
+                        new_info.create_system = entry.create_system
+                        new_info.flag_bits = entry.flag_bits
+                        new_info.compress_type = entry.compress_type
+                        new_info.comment = entry.comment
+                        new_info.external_attr = entry.external_attr
+                        dst_zf.writestr(new_info, entry_bytes)
+                        written_names.add(dest_filename)
 
                 # Write newly generated files (e.g. main.materials.json from materials.cs)
                 for add_name, add_data in added_files.items():
-                    if add_name not in written_names:
-                        dst_zf.writestr(add_name, add_data)
-                        written_names.add(add_name)
+                    clean_add_name = add_name.replace("\\", "/")
+                    if nested_prefix and clean_add_name.startswith(nested_prefix):
+                        clean_add_name = clean_add_name[len(nested_prefix):]
+                    if clean_add_name not in written_names:
+                        dst_zf.writestr(clean_add_name, add_data)
+                        written_names.add(clean_add_name)
 
         # Atomically swap temp_target into original location
         file_utils.atomic_replace(temp_target, archive_path)

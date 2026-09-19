@@ -5,10 +5,11 @@ Verifies:
 - Repair of missing comma after cookieName attribute
 - Repair of missing commas between JBeam array rows
 - Removal of directional headlight cutoff cookies from rear lamps
-- Boosting dim reverse light brightness to 1.2 and range to 16.0m
-- Boosting dim brake light brightness to 0.85 and range to 14.0m
-- Boosting dim taillight / running light brightness to 0.35 and range to 12.0m
-- Boosting turn signal brightness to 0.6 and range to 12.0m
+- Elimination of the white rear light bug (explicit lightColor injection to stop template inheritance)
+- Calibration of reverse lights to realistic 0.75 brightness and 13.0m range
+- Calibration of brake lights to realistic 0.35 brightness and 9.0m range (no nuclear red discs)
+- Calibration of taillights to realistic 0.12 brightness and 6.0m range
+- Injection of quadratic lightAttenuation (x:0, y:1, z:2) for smooth photographic road wash
 - Disabling self-shadow casting (lightCastShadows: false) on rear lights
 - Cadillac Escalade taillight sample verification
 """
@@ -78,32 +79,40 @@ def test_rear_light_boosts_reverse_and_brake_lights():
     jbeam = """{
         "props": [
             {
-                "lightRange": 8,
+                "lightRange": 5,
                 "lightCastShadows": true
             },
             ["reverse", "SPOTLIGHT", "tl2r", "tl4r", "tl1r", {"x":0, "y":-30, "z":-30}, {"x":0, "y":0, "z":0}, {"x":0, "y":0, "z":0}, 0, 0, 0, 1, {"lightBrightness": 0.06, "lightCastShadows": true}],
             ["brake", "SPOTLIGHT", "tl2r", "tl4r", "tl1r", {"x":0, "y":-30, "z":-40}, {"x":0, "y":0, "z":0}, {"x":0, "y":0, "z":0}, 0, 0, 0, 1, {"lightBrightness": 0.07, "lightCastShadows": true}],
-            ["lowhighbeam", "SPOTLIGHT", "tl2r", "tl4r", "tl1r", {"x":0, "y":-30, "z":-40}, {"x":0, "y":0, "z":0}, {"x":0, "y":0, "z":0}, 0, 0, 0, 1, {"lightBrightness": 0.02, "lightRange": 8}]
+            ["lowhighbeam", "SPOTLIGHT", "tl2r", "tl4r", "tl1r", {"x":0, "y":-30, "z":-40}, {"x":0, "y":0, "z":0}, {"x":0, "y":0, "z":0}, 0, 0, 0, 1, {"lightBrightness": 0.02, "lightRange": 4}]
         ]
     }"""
     fixed, count, diags = enhance_rear_light_content(jbeam, "car_taillights.jbeam")
 
-    # Template range boosted
-    assert '"lightRange": 14.0' in fixed
+    # Template range calibrated
+    assert '"lightRange": 10.0' in fixed
 
-    # Reverse boosted to 1.2, shadows disabled
-    assert '"lightBrightness": 1.2' in fixed
-    assert '"lightRange": 16.0' in fixed
+    # Reverse calibrated to 0.75, range 13.0m, warm white color, shadows disabled
+    assert '"lightBrightness": 0.75' in fixed
+    assert '"lightRange": 13.0' in fixed
     assert '"lightCastShadows": false' in fixed
+    assert '"lightColor": {"r": 255, "g": 250, "b": 220, "a": 255}' in fixed
 
-    # Brake boosted to 0.85, range 14.0, shadows disabled
-    assert '"lightBrightness": 0.85' in fixed
-    assert '"lightRange": 14.0' in fixed
-
-    # Lowhighbeam / taillight boosted to 0.35, range 12.0
+    # Brake calibrated to 0.35, range 9.0m, vivid red color, shadows disabled
     assert '"lightBrightness": 0.35' in fixed
+    assert '"lightRange": 9.0' in fixed
+    assert '"lightColor": {"r": 255, "g": 20, "b": 20, "a": 255}' in fixed
+
+    # Lowhighbeam / taillight calibrated to 0.12, range 6.0m, vivid red color
+    assert '"lightBrightness": 0.12' in fixed
+    assert '"lightRange": 6.0' in fixed
+
+    # Quadratic attenuation injected
+    assert '"lightAttenuation": {"x": 0, "y": 1, "z": 2}' in fixed
 
     assert any(d.rule == "rear_brightness_boosted" for d in diags)
+    assert any(d.rule == "rear_color_inheritance_prevented" for d in diags)
+    assert any(d.rule == "rear_attenuation_softened" for d in diags)
     assert any(d.rule == "rear_shadow_occlusion_disabled" for d in diags)
 
 
@@ -141,7 +150,44 @@ def test_cadillac_escalade_sample_fix():
 }"""
     fixed, count, diags = enhance_rear_light_content(cadillac_sample, "AR23esv_taillights.jbeam")
     assert '"cookieName":""' in fixed.replace(" ", "")
-    assert '"lightBrightness":1.2' in fixed
-    assert '"lightBrightness":0.85' in fixed
-    assert '"lightBrightness":0.6' in fixed
-    assert '"lightBrightness":0.35' in fixed
+    assert '"lightBrightness": 0.75' in fixed
+    assert '"lightBrightness": 0.35' in fixed
+    assert '"lightBrightness": 0.4' in fixed
+    assert '"lightBrightness": 0.12' in fixed
+    # Verify lowhighbeam has explicit red color to eliminate white headlight bug
+    assert '"lightColor": {"r": 255, "g": 20, "b": 20, "a": 255}' in fixed
+
+
+def test_eliminate_white_headlight_rear_bug():
+    """Verify that when a reverse light template precedes a taillight, white light is prevented."""
+    jbeam = """{
+        "props": [
+            {
+                "lightColor": {"r": 255, "g": 255, "b": 255, "a": 255},
+                "flareName": "vehicleReverseLightFlare"
+            },
+            ["reverse", "SPOTLIGHT", "a", "b", "c", {}, {}, {}, 0, 0, 0, 1, {"lightBrightness": 0.5}],
+            ["lowhighbeam", "SPOTLIGHT", "a", "b", "c", {}, {}, {}, 0, 0, 0, 1, {"lightBrightness": 0.5}]
+        ]
+    }"""
+    fixed, count, diags = enhance_rear_light_content(jbeam, "car_taillights.jbeam")
+    # Lowhighbeam must have explicit red color, NOT inheriting white!
+    assert '"lightColor": {"r": 255, "g": 20, "b": 20, "a": 255}' in fixed
+    assert any(d.rule == "rear_color_inheritance_prevented" for d in diags)
+
+
+def test_overbright_rear_spotlights_calibrated_down():
+    """Verify that nuclear-bright rear spotlights (e.g. 0.85 on tail, 1.5 on reverse) are calibrated down."""
+    jbeam = """{
+        "props": [
+            ["brake", "SPOTLIGHT", "a", "b", "c", {}, {}, {}, 0, 0, 0, 1, {"lightBrightness": 1.2, "lightRange": 25.0}],
+            ["lowhighbeam", "SPOTLIGHT", "a", "b", "c", {}, {}, {}, 0, 0, 0, 1, {"lightBrightness": 0.85, "lightRange": 18.0}]
+        ]
+    }"""
+    fixed, count, diags = enhance_rear_light_content(jbeam, "car_taillights.jbeam")
+    assert '"lightBrightness": 0.35' in fixed
+    assert '"lightBrightness": 0.12' in fixed
+    assert '"lightRange": 9.0' in fixed
+    assert '"lightRange": 6.0' in fixed
+    assert any(d.rule == "rear_brightness_calibrated" for d in diags)
+    assert any(d.rule == "rear_range_calibrated" for d in diags)

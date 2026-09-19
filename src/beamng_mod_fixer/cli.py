@@ -18,7 +18,9 @@ from beamng_mod_fixer.core.path_resolver import (
     resolve_beamng_paths,
     save_cached_paths,
 )
+from beamng_mod_fixer.core.mod_watcher import ModWatcher
 from beamng_mod_fixer.core.zip_processor import scan_and_fix_mods
+from beamng_mod_fixer.i18n import set_language
 from beamng_mod_fixer.models import ModStatus
 from beamng_mod_fixer.ui import InteractiveCLI, print_splash_banner
 
@@ -131,6 +133,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="1-Click Global Fix: Execute all repair actions and optimize graphics + clean cache.",
     )
     actions_group.add_argument(
+        "-w", "--watch",
+        action="store_true",
+        help="Launch background Downloads watcher to automatically install and repair newly downloaded mods.",
+    )
+    actions_group.add_argument(
         "-i", "--interactive",
         action="store_true",
         help="Launch the interactive hierarchical terminal UI menu.",
@@ -143,6 +150,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=list(OPTIMIZATION_PRESETS.keys()),
         default="ultra-max-fps",
         help="Graphics optimization preset (default: %(default)s).",
+    )
+    options_group.add_argument(
+        "--lang",
+        choices=["ru", "en"],
+        default=None,
+        help="Set user interface language ('ru' or 'en').",
     )
     options_group.add_argument(
         "--mode",
@@ -235,6 +248,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"  Path Cache     : {cache_info}")
         return 0
 
+    if args.lang:
+        set_language(args.lang)
+
     # Determine actions
     has_specific_action = (
         args.fix_mods
@@ -246,7 +262,26 @@ def main(argv: Optional[List[str]] = None) -> int:
         or args.optimize_graphics
         or args.clean_cache
         or args.all
+        or args.watch
     )
+
+    if args.watch:
+        if not args.quiet:
+            print_splash_banner()
+            print("[*] Launching Mod Auto-Installer watching Downloads folder...")
+            print(f"    Mods target directory: {mods_dir}")
+            print("    Press Ctrl+C to stop.\n")
+        watcher = ModWatcher(mods_dir=mods_dir)
+        watcher.start()
+        try:
+            import time
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            watcher.stop()
+            if not args.quiet:
+                print("\n[*] Mod Auto-Installer stopped cleanly.")
+            return 0
 
     # Launch interactive menu if requested or if interactive terminal with no specific actions
     if args.interactive or (not has_specific_action and sys.stdin.isatty()):
