@@ -224,3 +224,83 @@ def test_smart_headlight_does_not_inject_props_between_rows():
     assert "vehicleHighBeamFlare" not in fixed
     assert "lightRange" not in fixed
 
+
+def test_smart_headlight_repairs_negative_brightness_and_range():
+    jbeam = '''{
+        "spotlights": [
+            {"lightBrightness": -0.5, "lightRange": -25.0, "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]]
+        ]
+    }'''
+    fixed, count, diags = smart_fix_jbeam_content(jbeam)
+    assert '"lightBrightness": 0.75' in fixed
+    assert '"lightRange": 70.0' in fixed
+    assert "-0.5" not in fixed
+    assert "-25.0" not in fixed
+
+
+def test_smart_headlight_repairs_negative_and_equal_angles():
+    # Negative inner angle with positive outer angle
+    jbeam_neg = '''{
+        "spotlights": [
+            {"lightInnerAngle": -15, "lightOuterAngle": 50, "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]]
+        ]
+    }'''
+    fixed_neg, _, diags_neg = smart_fix_jbeam_content(jbeam_neg)
+    assert '"lightInnerAngle": 30.0' in fixed_neg
+    assert '"lightOuterAngle": 50' in fixed_neg
+
+    # Both negative angles
+    jbeam_both_neg = '''{
+        "spotlights": [
+            {"lightInnerAngle": -20, "lightOuterAngle": -10, "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]]
+        ]
+    }'''
+    fixed_both, _, _ = smart_fix_jbeam_content(jbeam_both_neg)
+    assert '"lightInnerAngle": 40.0' in fixed_both
+    assert '"lightOuterAngle": 65.0' in fixed_both
+
+    # Equal angles
+    jbeam_equal = '''{
+        "spotlights": [
+            {"lightInnerAngle": 50, "lightOuterAngle": 50, "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]]
+        ]
+    }'''
+    fixed_eq, _, _ = smart_fix_jbeam_content(jbeam_equal)
+    assert '"lightInnerAngle": 30.0' in fixed_eq
+    assert '"lightOuterAngle": 50' in fixed_eq
+
+
+def test_smart_headlight_converts_png_to_existing_dds():
+    jbeam = '''{
+        "spotlights": [
+            {"cookieName": "vehicles/custom_mod/light_cookie.png", "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]]
+        ]
+    }'''
+    available_files = {
+        "vehicles/custom_mod/car.jbeam",
+        "vehicles/custom_mod/light_cookie.dds",
+    }
+    fixed, count, diags = smart_fix_jbeam_content(jbeam, available_files=available_files)
+    assert '"vehicles/custom_mod/light_cookie.dds"' in fixed
+    assert any(d.rule == "cookie_extension_modernized" for d in diags)
+
+
+def test_smart_headlight_base_game_cookie_with_leading_slash_not_flagged_missing():
+    jbeam = '''{
+        "spotlights": [
+            {"cookieName": "/art/special/BNG_light_cookie_headlight.dds", "lightCastShadows": true},
+            ["lowbeam", ["a", "b", "c"]]
+        ]
+    }'''
+    available_files = {"vehicles/car/car.jbeam"}
+    fixed, count, diags = smart_fix_jbeam_content(jbeam, available_files=available_files)
+    # Leading slash should be stripped, and it must not be reported as missing
+    assert '"art/special/BNG_light_cookie_headlight.dds"' in fixed
+    assert not any(d.rule == "cookie_missing_replaced" for d in diags)
+
+

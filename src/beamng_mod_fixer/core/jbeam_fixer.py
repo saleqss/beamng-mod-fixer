@@ -47,9 +47,9 @@ RE_OBSOLETE_COOKIE = re.compile(
     r'(?i)[\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`](art/shapes/lights/[^\"\'`]+)[\"\'`]'
 )
 
-# General cookieName value extractor
+# General cookieName value extractor (preserving exact quotes)
 RE_COOKIE_VALUE = re.compile(
-    r'(?i)[\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`]([^\"\'`]+)[\"\'`]'
+    r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*)([\"\'`])([^\"\'`]+)([\"\'`])'
 )
 
 # Spotlight angles
@@ -68,25 +68,25 @@ MODERN_FOG_FLARE = "vehicleFogLightFlare"
 
 # Obsolete cookie path replacement (pre-PBR art/shapes/lights/* -> art/special/*)
 RE_OBSOLETE_COOKIE_REPLACE = re.compile(
-    r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`])art/shapes/lights/[^\"\'`]+([\"\'`])'
+    r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`])/*art/shapes/lights/[^\"\'`]+([\"\'`])'
 )
 
-# Cookie leading slash normalization: "/art/..." or "/vehicles/..." -> "art/..." or "vehicles/..."
+# Cookie leading slash normalization: strip any leading slash from VFS cookies ("/path/..." -> "path/...")
 RE_COOKIE_LEADING_SLASH = re.compile(
-    r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`])/+((?:art|vehicles)/[^\"\'`]+)([\"\'`])'
+    r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`])/+([^\"\'`]+)([\"\'`])'
 )
 
 # Obsolete .png extension for official headlight cookie
 RE_COOKIE_PNG_HEADLIGHT = re.compile(
-    r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`])art/special/bng_light_cookie_headlight\.png([\"\'`])'
+    r'(?i)([\"\'\`]?\bcookieName\b[\"\'\`]?\s*:\s*[\"\'`])/*art[/\\]special[/\\]bng_light_cookie_headlight\.png([\"\'`])'
 )
 
 # Spotlight zero or non-positive brightness and range
 RE_ZERO_BRIGHTNESS = re.compile(
-    r'(?i)([\"\'\`]?\blightBrightness\b[\"\'\`]?\s*:\s*)(-?0(?:\.0+)?)(?![.\d])'
+    r'(?i)([\"\'\`]?\blightBrightness\b[\"\'\`]?\s*:\s*)(-\d+(?:\.\d+)?|0(?:\.0+)?)(?![.\d])'
 )
 RE_ZERO_RANGE = re.compile(
-    r'(?i)([\"\'\`]?\blightRange\b[\"\'\`]?\s*:\s*)(-?0(?:\.0+)?)(?![.\d])'
+    r'(?i)([\"\'\`]?\blightRange\b[\"\'\`]?\s*:\s*)(-\d+(?:\.\d+)?|0(?:\.0+)?)(?![.\d])'
 )
 
 # Legacy flare names replacement
@@ -309,10 +309,10 @@ def _is_highbeam_context(text: str, pos: int) -> bool:
 
 
 def repair_spotlight_angles(content: str) -> Tuple[str, int, List[DiagnosticNotice]]:
-    """Detect and repair inverted or invalid spotlight angles (innerAngle > outerAngle).
+    """Detect and repair inverted, zero, or negative spotlight angles.
 
-    In Torque3D spotlight math, when innerAngle > outerAngle, the cosine falloff division
-    results in negative or zero light intensity, completely extinguishing the spotlight.
+    In Torque3D spotlight math, when innerAngle >= outerAngle or angles are non-positive,
+    the cosine falloff division results in zero or negative light intensity, extinguishing the spotlight.
     """
     diags: List[DiagnosticNotice] = []
     fixed_text = content
@@ -325,21 +325,36 @@ def repair_spotlight_angles(content: str) -> Tuple[str, int, List[DiagnosticNoti
         r'(?i)([\"\'\`]?lightOuterAngle[\"\'\`]?\s*:\s*)(-?\d+(?:\.\d+)?)([\s\S]{1,300}?)([\"\'\`]?lightInnerAngle[\"\'\`]?\s*:\s*)(-?\d+(?:\.\d+)?)'
     )
 
+    def _compute_valid_angles(inner_val: float, outer_val: float) -> Tuple[float, float, bool]:
+        if inner_val <= 0 and outer_val <= 0:
+            return 40.0, 65.0, True
+        elif inner_val <= 0 and outer_val > 0:
+            new_outer = outer_val
+            new_inner = min(40.0, round(outer_val * 0.6, 1))
+            return new_inner, new_outer, True
+        elif inner_val > 0 and outer_val <= 0:
+            new_inner = inner_val
+            new_outer = max(65.0, round(inner_val * 1.5, 1))
+            return new_inner, new_outer, True
+        elif inner_val >= outer_val:
+            new_inner = min(inner_val, outer_val)
+            new_outer = max(inner_val, outer_val)
+            if new_inner == new_outer:
+                new_inner = round(new_outer * 0.6, 1)
+            return new_inner, new_outer, True
+        return inner_val, outer_val, False
+
     def _fix_pair(m: re.Match) -> str:
         nonlocal repairs
         inner_val = float(m.group(2))
         outer_val = float(m.group(5))
-        if inner_val > outer_val or outer_val <= 0:
+        new_inner, new_outer, changed = _compute_valid_angles(inner_val, outer_val)
+        if changed:
             repairs += 1
-            new_inner = min(inner_val, outer_val)
-            new_outer = max(inner_val, outer_val)
-            if new_outer <= 0:
-                new_inner = 40.0
-                new_outer = 65.0
             diags.append(
                 DiagnosticNotice(
                     severity="info",
-                    message=f"Repaired inverted spotlight angles from inner={inner_val}, outer={outer_val} to inner={new_inner}, outer={new_outer}",
+                    message=f"Repaired invalid spotlight angles from inner={inner_val}, outer={outer_val} to inner={new_inner}, outer={new_outer}",
                     rule="spotlight_angle_repaired",
                 )
             )
@@ -352,17 +367,13 @@ def repair_spotlight_angles(content: str) -> Tuple[str, int, List[DiagnosticNoti
         nonlocal repairs
         outer_val = float(m.group(2))
         inner_val = float(m.group(5))
-        if inner_val > outer_val or outer_val <= 0:
+        new_inner, new_outer, changed = _compute_valid_angles(inner_val, outer_val)
+        if changed:
             repairs += 1
-            new_inner = min(inner_val, outer_val)
-            new_outer = max(inner_val, outer_val)
-            if new_outer <= 0:
-                new_inner = 40.0
-                new_outer = 65.0
             diags.append(
                 DiagnosticNotice(
                     severity="info",
-                    message=f"Repaired inverted spotlight angles from inner={inner_val}, outer={outer_val} to inner={new_inner}, outer={new_outer}",
+                    message=f"Repaired invalid spotlight angles from inner={inner_val}, outer={outer_val} to inner={new_inner}, outer={new_outer}",
                     rule="spotlight_angle_repaired",
                 )
             )
@@ -502,15 +513,15 @@ def audit_spotlights(
             f.lower().replace("\\", "/") for f in available_files
         }
         for match in RE_COOKIE_VALUE.finditer(content):
-            cookie_val = match.group(1).strip()
+            cookie_val = match.group(3).strip()
             # Ignore Lua expressions (starting with $)
             if cookie_val.startswith("$"):
                 continue
+            cookie_norm = cookie_val.lower().replace("\\", "/").lstrip("/")
             # Ignore base game official cookies
-            if cookie_val.lower().startswith("art/special/") or cookie_val.lower().startswith("art/"):
+            if cookie_norm.startswith("art/special/") or cookie_norm.startswith("art/"):
                 continue
             # Check local vehicle cookie paths
-            cookie_norm = cookie_val.lower().replace("\\", "/")
             if cookie_norm and cookie_norm not in normalized_archive_files:
                 diagnostics.append(
                     DiagnosticNotice(
@@ -641,8 +652,9 @@ def fix_jbeam_content(
     has_optics = any(tok in content_lower for tok in ("flarename", "cookiename", "spotlights"))
     has_electrics = any(tok in content_lower for tok in ("low_beam", "high_beam", "fog_light", "headlight"))
     has_angles = "lightinnerangle" in content_lower and "lightouterangle" in content_lower
+    has_brightness = "lightbrightness" in content_lower or "lightrange" in content_lower
 
-    if not has_shadows and not has_optics and not has_electrics and not has_angles:
+    if not has_shadows and not has_optics and not has_electrics and not has_angles and not has_brightness:
         return content, 0, diagnostics
 
     fix_count = 0
@@ -709,11 +721,26 @@ def fix_jbeam_content(
         if available_files is not None:
             normalized_archive = {f.lower().replace("\\", "/") for f in available_files}
             def _fix_missing_cookie(m: re.Match) -> str:
-                cval = m.group(1).strip()
-                if cval.startswith("$") or cval.lower().startswith("art/special/") or cval.lower().startswith("art/"):
+                cval = m.group(3).strip()
+                cval_norm = cval.lower().replace("\\", "/").lstrip("/")
+                if cval.startswith("$") or cval_norm.startswith("art/special/") or cval_norm.startswith("art/"):
                     return m.group(0)
-                norm = cval.lower().replace("\\", "/").lstrip("/")
-                if norm and norm not in normalized_archive:
+                if cval_norm and cval_norm not in normalized_archive:
+                    # If mod authored with .png but only .dds exists in archive, update extension
+                    if cval_norm.endswith(".png"):
+                        dds_cand = cval_norm[:-4] + ".dds"
+                        if dds_cand in normalized_archive:
+                            diagnostics.append(
+                                DiagnosticNotice(
+                                    severity="info",
+                                    message=f"Converted cookie path '{cval}' from .png to existing archive .dds '{dds_cand}'",
+                                    file_path=filename,
+                                    rule="cookie_extension_modernized",
+                                )
+                            )
+                            new_path = cval[:-4] + ".dds"
+                            return f'{m.group(1)}{m.group(2)}{new_path}{m.group(4)}'
+
                     diagnostics.append(
                         DiagnosticNotice(
                             severity="info",
@@ -722,9 +749,7 @@ def fix_jbeam_content(
                             rule="cookie_missing_replaced",
                         )
                     )
-                    prefix = m.group(0).split(":")[0]
-                    quote = '"'
-                    return f'{prefix}: {quote}{MODERN_HEADLIGHT_COOKIE}{quote}'
+                    return f'{m.group(1)}{m.group(2)}{MODERN_HEADLIGHT_COOKIE}{m.group(4)}'
                 return m.group(0)
 
             text = RE_COOKIE_VALUE.sub(_fix_missing_cookie, text)

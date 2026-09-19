@@ -231,12 +231,8 @@ class TestLargeFileStressAndReDoS:
 # ==============================================================================
 
 class TestAdversarialFailureModes:
-    """Document and expose edge case vulnerabilities where regex fails or over-replaces."""
+    """Document and verify edge cases where regex handles comments, hyphens, and strings."""
 
-    @pytest.mark.xfail(
-        reason="BUG 1: Regex requires whitespace before colon (\\s*:), failing on comments before colon",
-        strict=False
-    )
     def test_inline_comment_before_colon(self):
         """Inline comments between key and colon must be supported in valid JBeam."""
         raw = '{"lightCastShadows" /* disable headlight shadow */ : true}'
@@ -244,10 +240,6 @@ class TestAdversarialFailureModes:
         assert count == 1, "Failed to match lightCastShadows with inline comment before colon"
         assert '/* disable headlight shadow */ : false' in fixed
 
-    @pytest.mark.xfail(
-        reason="BUG 2: Regex lacks DOTALL flag, so multiline comments between colon and value fail",
-        strict=False
-    )
     def test_multiline_comment_between_colon_and_value(self):
         """Multiline comments across line breaks between colon and true must be matched."""
         raw = '"lightCastShadows": /* line 1\n line 2 */ true'
@@ -255,10 +247,6 @@ class TestAdversarialFailureModes:
         assert count == 1, "Failed to match lightCastShadows with multiline comment after colon"
         assert 'false' in fixed
 
-    @pytest.mark.xfail(
-        reason="BUG 3: Regex only matches /* ... */ comments, missing // single-line comments",
-        strict=False
-    )
     def test_single_line_comment_between_colon_and_value(self):
         """Single-line comment between colon and newline true must be matched."""
         raw = '"lightCastShadows": // toggle shadow off\n true'
@@ -266,10 +254,6 @@ class TestAdversarialFailureModes:
         assert count == 1, "Failed to match lightCastShadows with single-line comment"
         assert 'false' in fixed
 
-    @pytest.mark.xfail(
-        reason="BUG 4: Regex matches hyphenated keys (foo-lightCastShadows) due to word boundary and optional quotes",
-        strict=False
-    )
     def test_hyphenated_key_false_positive(self):
         """A hyphenated key like 'disable-lightCastShadows' must NOT be mutated."""
         raw = '{"disable-lightCastShadows": true}'
@@ -277,10 +261,6 @@ class TestAdversarialFailureModes:
         assert count == 0, f"Wrongfully modified hyphenated key! Result: {fixed}"
         assert fixed is raw
 
-    @pytest.mark.xfail(
-        reason="BUG 5: Regex matches inside string literals in non-lighting description properties",
-        strict=False
-    )
     def test_string_literal_in_description_false_positive(self):
         """String literals in non-lighting description must NOT have their text modified."""
         raw = '{"description": "Mod update: lightCastShadows: true was removed in 0.24"}'
