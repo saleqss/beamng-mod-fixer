@@ -142,3 +142,22 @@ def test_cli_quiet_mode(tmp_path: Path) -> None:
     assert res_quiet.returncode == 0
     assert len(res_quiet.stdout) < len(res_normal.stdout)
 
+
+def test_cli_show_paths() -> None:
+    """Test that --show-paths prints detected BeamNG paths and exits with code 0."""
+    res = run_cli("--show-paths")
+    assert res.returncode == 0
+    assert "detected beamng" in res.stdout.lower()
+    assert "user directory" in res.stdout.lower()
+    assert "mods directory" in res.stdout.lower()
+
+
+def test_cli_user_dir_flag(tmp_path: Path) -> None:
+    """Test passing --user-dir sets all sub-paths accordingly."""
+    user_dir = tmp_path / "custom_user"
+    user_dir.mkdir()
+    res = run_cli("--user-dir", str(user_dir), "--show-paths")
+    assert res.returncode == 0
+    assert str(user_dir).lower() in res.stdout.lower()
+
+

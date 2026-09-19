@@ -3,7 +3,7 @@
 [![CI](https://github.com/saleqss/beamng-mod-fixer/actions/workflows/ci.yml/badge.svg)](https://github.com/saleqss/beamng-mod-fixer/actions)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-230%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
+[![Tests](https://img.shields.io/badge/tests-242%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
 [![Совместимость BeamNG](https://img.shields.io/badge/BeamNG.drive-0.30%20--%200.34%2B-orange)](https://beamng.com)
 
 > **Универсальный инструмент для полного устранения всех багов модов после обновлений BeamNG.drive (0.30 - 0.34+).** Автоматически исправляет **черные фары**, оранжевые текстуры **"NO TEXTURE"**, устаревшие **`materials.cs`**, зависающие машины и **взрывающиеся дифференциалы**, разорванные колеса и нулевое давление в шинах (**`pressurePSI`**), немые звуки моторов и краши аудио до-FMOD, а также фатальные ошибки кастомных **Lua-скриптов**. Применяет пресет кинематографичной графики на 60+ FPS и безопасно очищает кэш шейдеров.
@@ -150,34 +150,57 @@ GBEAM FIX настраивает сбалансированные профили
 
 ---
 
+## 📁 Автоопределение путей на любых дисках и 0ms кэширование
+
+GBEAM FIX **автоматически и мгновенно находит папку BeamNG.drive**, даже при нестандартных установках, перемещенных библиотеках Steam или нескольких SSD/HDD:
+
+1. **Сканирование версий в AppData**: проверяет `%LOCALAPPDATA%\BeamNG\BeamNG.drive\` по всем подпапкам версий (`current`, `latest`, `0.34`, `0.33`, `0.32`, `0.31`, `0.30` и др.). Интеллектуальный скоринг выбирает наиболее активную папку (приоритет отдается каталогам с архивами модов или самой свежей датой изменения).
+2. **Интеграция с реестром Windows и Steam**: опрашивает ключи `HKCU\Software\Valve\Steam` и `HKLM\SOFTWARE\Valve\Steam`, парсит `libraryfolders.vdf` на всех подключенных дисках для App ID `284160`, а также считывает переопределение `UserPath` из `startup.ini`.
+3. **Мульти-дисковый поиск**: быстро проверяет стандартные корневые и игровые директории на дисках `D:\`, `E:\`, `F:\`... (`BeamNG.drive`, `Games\BeamNG.drive`).
+4. **Мгновенный постоянный кэш (0 ms)**: сохраняет проверенные пути в `%LOCALAPPDATA%\BeamNGModFixer\config.json` (или `~/.beamng_fixer_paths.json`). При повторных запусках пути загружаются за **0 мс** без повторного сканирования дисков.
+5. **Интерактивное управление и CLI**: пункт меню `[9]` позволяет просмотреть активные пути, ввести свой путь с автоматической валидацией, запустить пересканирование или сбросить настройки. Также поддерживаются флаги `-u`, `--user-dir`, `-m`, `--mods-dir`, `--show-paths`.
+
+---
+
 ## 🖥️ Удобное интерактивное меню
 
 Запустите команду `agy-gbeam-fix` без параметров:
 
 ```text
-ГЛАВНОЕ МЕНЮ УПРАВЛЕНИЯ:
-  [1] ⚡ Глобальный фикс в 1 клик (Фары + Текстуры + Трансмиссия + Звуки + Графика + Кэш)
-  [2] 💡 Студия оптики и фар (Умный фикс, исправление углов, современные куки)
-  [3] 🎨 Доктор материалов и текстур (Лечение NO TEXTURE, materials.cs -> 1.5 JSON, VFS)
-  [4] ⚙️ Ремонт трансмиссии и физики (Зависшие дифференциалы, давление в шинах, сцепление)
-  [5] 🔊 Модернизатор звука и защита Lua (FMOD эвенты, защита скриптов от вылетов)
-  [6] 🚀 Оптимизатор графики и FPS (Пресеты Cinematic-Fast, Balanced, Maximum-FPS)
-  [7] 🧹 Очистка кэша и диагностика (Шейдеры DirectX/Vulkan, AST-кэш, временные файлы)
-  [8] 📋 Глубокий аудит модов (Безопасное dry-run сканирование без изменения файлов)
-  [0] 🚪 Выход
+MAIN CONTROL MENU (ГЛАВНОЕ МЕНЮ):
+  [1] 🚀 ГЛОБАЛЬНЫЙ ФИКС В 1 КЛИК (1-Click Global Fix) (Оптика + Текстуры + Физика + Звук + Lua + Графика + Кэш)
+  [2] 💡 Headlights & Optics Studio (Smart Fix, Angle repair, cookie modernizer)
+  [3] 🎨 Materials & Texture Doctor (Fix NO TEXTURE, materials.cs -> 1.5 JSON, VFS paths)
+  [4] ⚙️ Drivetrain & Physics Repair (Fix frozen cars, differential explosion, tire PSI)
+  [5] 🔊 Sound & Lua Crash Guard (Modernize FMOD audio, patch obsolete lua APIs)
+  [6] 🚀 Graphics & FPS Optimizer (Cinematic-Fast, Balanced, Maximum-FPS presets)
+  [7] 🧹 Cache & Diagnostics Purge (DirectX/Vulkan shaders, vehicle binaries, temp files)
+  [8] 📋 Deep Mod Health Audit (Safe non-modifying dry-run scan with report)
+  [9] 📁 Change / View BeamNG Directory & Paths (Multi-drive auto-detection & path validator)
+  [0] 🚪 Exit
 ```
 
-- Любое подменю позволяет выполнить точечный фикс с подробным отчетом и мгновенно вернуться в главное меню по нажатию Enter.
+- **Единый пайплайн в 1 клик (Пункт [1])**: последовательно выполняет все 7 этапов: исправление фар и оптики, конвертация materials.cs в JSON 1.5, разморозка дифференциалов и шин, модернизация звуков в FMOD, защита Lua-скриптов, установка кинематографичного пресета графики и очистка кэша шейдеров DirectX/Vulkan.
+- **Двусторонняя студийная навигация**: после завершения любого фикса программа переходит в **Post-Fix Studio** с подробной статистикой и мгновенным возвратом в главное меню по нажатию Enter или клавиши `[1]`.
 
 ---
 
 ## 🛠️ Параметры командной строки (CLI)
 
 ```bash
-# Глобальный фикс в 1 клик (Все исправления + графика + кэш)
+# Глобальный фикс в 1 клик (Все 7 этапов + графика + кэш)
 agy-gbeam-fix --all
 
-# Только исправление модов
+# Показать обнаруженные пути BeamNG и выйти
+agy-gbeam-fix --show-paths
+
+# Указать пользовательскую папку BeamNG вручную
+agy-gbeam-fix --user-dir "%LOCALAPPDATA%/BeamNG/BeamNG.drive/0.34" --all
+
+# Указать нестандартную папку с модами
+agy-gbeam-fix --mods-dir "D:/BeamNG_Mods" --all
+
+# Только исправление модов (оптика, материалы, дифференциалы, звуки, lua)
 agy-gbeam-fix --fix-mods
 
 # Только доктор материалов и текстур
@@ -194,22 +217,20 @@ agy-gbeam-fix --clean-cache
 
 # Безопасный предпросмотр без изменения файлов (Dry Run)
 agy-gbeam-fix --all --dry-run
-
-# Указать нестандартную папку с модами
-agy-gbeam-fix --mods-dir "D:/BeamNG_Mods" --all
 ```
 
 ---
 
-## 🧪 222 автоматических теста качества
+## 🧪 242 автоматических теста качества
 
-Надежность алгоритмов подтверждена **222 автоматическими тестами pytest**:
+Надежность алгоритмов подтверждена **242 автоматическими тестами pytest**:
 
 ```bash
 python -m pytest -v
 ```
 
-- Тестирование регулярных выражений и кодировок (UTF-8, UTF-8-BOM, CP1251, CP1252).
+- Тестирование регулярных выражений, конвертера TorqueScript и кодировок (UTF-8, UTF-8-BOM, CP1251, CP1252).
+- Автоопределение путей на разных дисках, парсинг VDF реестра Steam, валидация и 0ms кэширование.
 - Проверка потоковой записи ZIP без повреждения моделей DAE, звуков и текстур.
 - Защита от поврежденных, заблокированных или защищенных паролем архивов.
 

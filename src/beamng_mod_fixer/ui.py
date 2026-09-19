@@ -22,7 +22,15 @@ from beamng_mod_fixer.core.graphics_optimizer import (
     optimize_settings,
     restore_settings_backup,
 )
-from beamng_mod_fixer.core.path_resolver import detect_beamng_user_dir, resolve_beamng_paths
+from beamng_mod_fixer.core.path_resolver import (
+    clear_cached_paths,
+    detect_beamng_user_dir,
+    get_cache_config_path,
+    load_cached_paths,
+    resolve_beamng_paths,
+    save_cached_paths,
+    validate_beamng_dir,
+)
 from beamng_mod_fixer.core.zip_processor import process_mod_archive, scan_and_fix_mods
 from beamng_mod_fixer.models import ModStatus, OverallSummary
 
@@ -151,8 +159,8 @@ class InteractiveCLI:
             print(SPLASH_BANNER)
             print_status_bar(self.paths)
 
-            print(f"{Colors.BOLD}{Colors.WHITE}MAIN CONTROL MENU:{Colors.RESET}")
-            print(f"  {Colors.GREEN}{Colors.BOLD}[1] ⚡ 1-Click Global Fix{Colors.RESET} {Colors.DIM}(Headlights + Textures + Drivetrain + Sounds + Graphics + Cache){Colors.RESET}")
+            print(f"{Colors.BOLD}{Colors.WHITE}MAIN CONTROL MENU (ГЛАВНОЕ МЕНЮ):{Colors.RESET}")
+            print(f"  {Colors.GREEN}{Colors.BOLD}[1] 🚀 ГЛОБАЛЬНЫЙ ФИКС В 1 КЛИК (1-Click Global Fix){Colors.RESET} {Colors.DIM}(Оптика + Текстуры + Физика + Звук + Lua + Графика + Кэш){Colors.RESET}")
             print(f"  {Colors.CYAN}[2] 💡 Headlights & Optics Studio{Colors.RESET} {Colors.DIM}(Smart Fix, Angle repair, cookie modernizer){Colors.RESET}")
             print(f"  {Colors.YELLOW}[3] 🎨 Materials & Texture Doctor{Colors.RESET} {Colors.DIM}(Fix NO TEXTURE, materials.cs -> 1.5 JSON, VFS paths){Colors.RESET}")
             print(f"  {Colors.MAGENTA}[4] ⚙️ Drivetrain & Physics Repair{Colors.RESET} {Colors.DIM}(Fix frozen cars, differential explosion, tire PSI){Colors.RESET}")
@@ -160,10 +168,11 @@ class InteractiveCLI:
             print(f"  {Colors.CYAN}[6] 🚀 Graphics & FPS Optimizer{Colors.RESET} {Colors.DIM}(Cinematic-Fast, Balanced, Maximum-FPS presets){Colors.RESET}")
             print(f"  {Colors.GREEN}[7] 🧹 Cache & Diagnostics Purge{Colors.RESET} {Colors.DIM}(DirectX/Vulkan shaders, vehicle binaries, temp files){Colors.RESET}")
             print(f"  {Colors.YELLOW}[8] 📋 Deep Mod Health Audit{Colors.RESET} {Colors.DIM}(Safe non-modifying dry-run scan with report){Colors.RESET}")
+            print(f"  {Colors.CYAN}[9] 📁 Change / View BeamNG Directory & Paths{Colors.RESET} {Colors.DIM}(Multi-drive auto-detection & path validator){Colors.RESET}")
             print(f"  {Colors.RED}[0] 🚪 Exit{Colors.RESET}")
 
             try:
-                choice = input(f"\n{Colors.BOLD}Select an option [0-8] (default: 1): {Colors.RESET}").strip()
+                choice = input(f"\n{Colors.BOLD}Select an option [0-9] (default: 1): {Colors.RESET}").strip()
             except (KeyboardInterrupt, EOFError):
                 print(f"\n{Colors.YELLOW}Operation cancelled by user.{Colors.RESET}")
                 return 0
@@ -184,40 +193,59 @@ class InteractiveCLI:
                 self.menu_cache_purge()
             elif choice == "8":
                 self.action_deep_audit()
+            elif choice == "9":
+                self.menu_paths_manager()
             elif choice == "0":
                 print(f"\n{Colors.GREEN}Thank you for using GBEAM FIX. Happy driving!{Colors.RESET}")
                 return 0
             else:
-                print(f"{Colors.RED}Invalid option. Please enter a number between 0 and 8.{Colors.RESET}")
+                print(f"{Colors.RED}Invalid option. Please enter a number between 0 and 9.{Colors.RESET}")
                 time.sleep(1)
 
     # ==========================================================================
     # Action 1: 1-Click Global Fix
     # ==========================================================================
     def action_global_fix(self) -> None:
-        """Run complete 1-Click Global Fix across all repair stages."""
+        """Run complete 1-Click Global Fix across all 7 repair and optimization stages."""
         clear_screen()
         print(SPLASH_BANNER)
-        print(f"{Colors.BOLD}{Colors.GREEN}>>> EXECUTING 1-CLICK GLOBAL FIX <<<{Colors.RESET}\n")
+        print(f"{Colors.BOLD}{Colors.GREEN}╔════════════════════════════════════════════════════════════════════════════╗{Colors.RESET}")
+        print(f"{Colors.BOLD}{Colors.GREEN}║          🚀 EXECUTING 1-CLICK GLOBAL FIX (ГЛОБАЛЬНЫЙ ФИКС В 1 КЛИК)        ║{Colors.RESET}")
+        print(f"{Colors.BOLD}{Colors.GREEN}╚════════════════════════════════════════════════════════════════════════════╝{Colors.RESET}\n")
 
-        # Stage 1: Purge corrupt cache
-        print(f"{Colors.CYAN}[Stage 1/3]{Colors.RESET} Purging corrupt shader & vehicle temporary caches...")
-        try:
-            cache_res = clean_shader_cache(self.paths["cache_dir"], dry_run=self.dry_run)
-            print(f"  ✔ Purged {cache_res.files_deleted} cache files ({cache_res.bytes_freed / 1024 / 1024:.2f} MB freed)")
-        except Exception as e:
-            print(f"  {Colors.YELLOW}⚠ Cache clean note: {e}{Colors.RESET}")
+        print(f"{Colors.CYAN}Starting Unified 7-Stage Repair & Optimization Pipeline...{Colors.RESET}\n")
 
-        # Stage 2: Deploy optimized graphics preset
-        print(f"\n{Colors.CYAN}[Stage 2/3]{Colors.RESET} Deploying 'cinematic-fast' graphics optimization preset...")
-        try:
-            opt_res = optimize_settings(self.paths["settings_dir"], preset="cinematic-fast", dry_run=self.dry_run)
-            print(f"  ✔ Applied 60FPS fast reflections, soft shadows, and clustered lighting ({len(opt_res.applied_keys)} keys tuned)")
-        except Exception as e:
-            print(f"  {Colors.YELLOW}⚠ Graphics optimize note: {e}{Colors.RESET}")
+        # Mod Scan & Multi-Domain Repair (Stages 1 to 5)
+        print(f"{Colors.BOLD}{Colors.CYAN}[Stages 1-5/7]{Colors.RESET} {Colors.WHITE}Comprehensive Mod Archives Repair Pipeline:{Colors.RESET}")
+        print(f"  {Colors.CYAN}1. Headlights & Optics Fix{Colors.RESET}       (Selective lowbeams, cookie modernizer, angle repair)")
+        print(f"  {Colors.YELLOW}2. Materials & Texture Doctor{Colors.RESET}    (materials.cs -> 1.5 JSON, resolves orange NO TEXTURE)")
+        print(f"  {Colors.MAGENTA}3. Drivetrain & Physics Repair{Colors.RESET}   (Unfreezes differentials, clamps tire pressures)")
+        print(f"  {Colors.WHITE}4. Sound Modernizer{Colors.RESET}              (Pre-FMOD audio paths -> BeamNG FMOD sound events)")
+        print(f"  {Colors.GREEN}5. Lua Safety Guard{Colors.RESET}              (Guards deprecated vehicle Lua calls from crashes)")
+        print(f"  {Colors.DIM}Target Folder: {self.paths['mods_dir']}{Colors.RESET}\n")
 
-        # Stage 3: Scan and fix all mods
-        print(f"\n{Colors.CYAN}[Stage 3/3]{Colors.RESET} Scanning & repairing all mod archives in: {self.paths['mods_dir']}...")
+        def _progress_cb(p: Path, r: Any, idx: int, tot: int) -> None:
+            if r.status == ModStatus.FIXED.value:
+                details = []
+                if r.shadows_fixed:
+                    details.append(f"Optics: {r.shadows_fixed}")
+                if r.materials_converted or r.materials_fixed:
+                    details.append(f"Mats: {r.materials_converted + r.materials_fixed}")
+                if r.drivetrains_fixed:
+                    details.append(f"Drivetrain: {r.drivetrains_fixed}")
+                if r.sounds_fixed:
+                    details.append(f"Audio: {r.sounds_fixed}")
+                if r.lua_fixed:
+                    details.append(f"Lua: {r.lua_fixed}")
+                det_str = ", ".join(details) if details else "repaired"
+                print(f"  [{idx:02d}/{tot:02d}] {Colors.GREEN}✔ {p.name}{Colors.RESET} -> {det_str}")
+            elif r.status == ModStatus.CLEAN.value:
+                print(f"  [{idx:02d}/{tot:02d}] {Colors.GRAY}• {p.name}: Clean (No repairs needed){Colors.RESET}")
+            elif r.status == ModStatus.ERROR.value:
+                print(f"  [{idx:02d}/{tot:02d}] {Colors.RED}❌ {p.name}: Error ({r.error_message}){Colors.RESET}")
+            elif r.status in (ModStatus.LOCKED.value, ModStatus.CORRUPT.value, ModStatus.ENCRYPTED.value):
+                print(f"  [{idx:02d}/{tot:02d}] {Colors.YELLOW}⚠ {p.name}: Skipped ({r.status.upper()}){Colors.RESET}")
+
         summary = scan_and_fix_mods(
             self.paths["mods_dir"],
             dry_run=self.dry_run,
@@ -227,17 +255,32 @@ class InteractiveCLI:
             fix_sound=True,
             fix_lua=True,
             clean_junk=True,
-            progress_callback=lambda p, r, idx, tot: (
-                print(f"  [{idx}/{tot}] {p.name}: {r.status.upper()} "
-                      f"(Optics: {r.shadows_fixed}, Mats: {r.materials_converted + r.materials_fixed}, "
-                      f"Drivetrain: {r.drivetrains_fixed}, Audio: {r.sounds_fixed})")
-                if r.status == ModStatus.FIXED.value
-                else None
-            )
+            progress_callback=_progress_cb,
         )
 
+        # Stage 6: Graphics & FPS Optimizer
+        print(f"\n{Colors.BOLD}{Colors.CYAN}[Stage 6/7]{Colors.RESET} {Colors.WHITE}Deploying 'cinematic-fast' Graphics & FPS Optimization Preset...{Colors.RESET}")
+        try:
+            opt_res = optimize_settings(self.paths["settings_dir"], preset="cinematic-fast", dry_run=self.dry_run)
+            print(f"  {Colors.GREEN}✔ Applied 60FPS dynamic reflections, soft shadows, and clustered lighting ({len(opt_res.applied_keys)} keys tuned){Colors.RESET}")
+            if opt_res.backup_created:
+                print(f"    Settings backup saved: {opt_res.backup_path}")
+        except Exception as e:
+            print(f"  {Colors.YELLOW}⚠ Graphics optimize note: {e}{Colors.RESET}")
+
+        # Stage 7: Cache Purge
+        print(f"\n{Colors.BOLD}{Colors.CYAN}[Stage 7/7]{Colors.RESET} {Colors.WHITE}Purging compiled DirectX/Vulkan shader binaries in temp/...{Colors.RESET}")
+        try:
+            cache_res = clean_shader_cache(self.paths["cache_dir"], dry_run=self.dry_run)
+            print(f"  {Colors.GREEN}✔ Purged {cache_res.files_deleted} cache files ({cache_res.bytes_freed / 1024 / 1024:.2f} MB freed){Colors.RESET}")
+        except Exception as e:
+            print(f"  {Colors.YELLOW}⚠ Cache clean note: {e}{Colors.RESET}")
+
+        print(f"\n{Colors.GREEN}{Colors.BOLD}✔ All 7 Pipeline Stages Completed Successfully!{Colors.RESET}")
+        time.sleep(1)
+
         # Transition into dedicated Post-Fix Studio Menu
-        self.menu_fix_results(summary, title="1-CLICK GLOBAL FIX RESULTS")
+        self.menu_fix_results(summary, title="🚀 ГЛОБАЛЬНЫЙ ФИКС — РЕЗУЛЬТАТЫ / 1-CLICK GLOBAL FIX RESULTS")
 
     # ==========================================================================
     # Submenu: Headlights & Optics Studio
@@ -458,6 +501,95 @@ class InteractiveCLI:
         )
         # Transition into dedicated Post-Fix Studio Menu
         self.menu_fix_results(summary, title="MOD HEALTH AUDIT REPORT")
+
+    # ==========================================================================
+    # Submenu 9: BeamNG Directory & Path Management
+    # ==========================================================================
+    def menu_paths_manager(self) -> None:
+        """Submenu for viewing and changing BeamNG paths with automatic validation."""
+        while True:
+            clear_screen()
+            print(SPLASH_BANNER)
+            print(f"{Colors.BOLD}{Colors.CYAN}📁 BEAMNG DIRECTORY & PATH MANAGEMENT (УПРАВЛЕНИЕ ПУТЯМИ BEAMNG){Colors.RESET}\n")
+
+            user_dir = self.paths.get("user_dir", Path("."))
+            mods_dir = self.paths.get("mods_dir", Path("mods"))
+            settings_dir = self.paths.get("settings_dir", Path("settings"))
+            cache_dir = self.paths.get("cache_dir", Path("temp"))
+
+            mod_count = 0
+            if mods_dir.exists() and mods_dir.is_dir():
+                try:
+                    mod_count = len([p for p in mods_dir.iterdir() if p.is_file() and p.suffix.lower() == ".zip"])
+                except OSError:
+                    pass
+
+            cache_file = get_cache_config_path()
+            cache_status = f"{Colors.GREEN}Active (0ms instant){Colors.RESET}" if cache_file.exists() else f"{Colors.GRAY}Not cached{Colors.RESET}"
+
+            print(f"{Colors.GRAY}┌─ Current Active Paths ──────────────────────────────────────────────────┐{Colors.RESET}")
+            print(f"{Colors.GRAY}│{Colors.RESET} {Colors.WHITE}User Directory:{Colors.RESET}     {Colors.CYAN}{user_dir}{Colors.RESET} {'✔' if user_dir.exists() else '❌'}")
+            print(f"{Colors.GRAY}│{Colors.RESET} {Colors.WHITE}Mods Folder:        {Colors.RESET} {Colors.CYAN}{mods_dir}{Colors.RESET} {Colors.YELLOW}({mod_count} mod archives){Colors.RESET} {'✔' if mods_dir.exists() else '❌'}")
+            print(f"{Colors.GRAY}│{Colors.RESET} {Colors.WHITE}Settings Folder:    {Colors.RESET} {Colors.CYAN}{settings_dir}{Colors.RESET} {'✔' if settings_dir.exists() else '❌'}")
+            print(f"{Colors.GRAY}│{Colors.RESET} {Colors.WHITE}Cache / Temp Folder:{Colors.RESET} {Colors.CYAN}{cache_dir}{Colors.RESET} {'✔' if cache_dir.exists() else '❌'}")
+            print(f"{Colors.GRAY}│{Colors.RESET} {Colors.WHITE}Persistent Cache:   {Colors.RESET} {cache_status}")
+            print(f"{Colors.GRAY}└─────────────────────────────────────────────────────────────────────────┘{Colors.RESET}\n")
+
+            print(f"  [1] 📝 Specify Custom BeamNG User Directory (e.g. D:\\BeamNG.drive or %LOCALAPPDATA%\\BeamNG\\BeamNG.drive\\0.34)")
+            print(f"  [2] 📦 Specify Custom Mods Directory directly (e.g. D:\\MyMods)")
+            print(f"  [3] 🔄 Re-Scan System for BeamNG Installations (Auto-discover across AppData, Steam & All Drives)")
+            print(f"  [4] 🧹 Reset Paths to Default Auto-Detection & Clear Cache")
+            print(f"  [0] ↩️  Return to Main Menu")
+
+            try:
+                choice = input(f"\n{Colors.BOLD}Select an option [0-4]: {Colors.RESET}").strip()
+            except (KeyboardInterrupt, EOFError):
+                return
+
+            if choice == "0":
+                return
+            elif choice == "1":
+                try:
+                    new_path_str = input(f"\nEnter BeamNG User Directory path: ").strip()
+                except (KeyboardInterrupt, EOFError):
+                    return
+                if new_path_str:
+                    is_valid, msg, resolved = validate_beamng_dir(new_path_str)
+                    if is_valid:
+                        self.paths = resolved
+                        save_cached_paths(self.paths)
+                        print(f"\n{Colors.GREEN}✔ {msg}{Colors.RESET}")
+                    else:
+                        print(f"\n{Colors.RED}❌ {msg}{Colors.RESET}")
+                    pause_return()
+            elif choice == "2":
+                try:
+                    new_mods_str = input(f"\nEnter Mods Directory path: ").strip()
+                except (KeyboardInterrupt, EOFError):
+                    return
+                if new_mods_str:
+                    is_valid, msg, resolved = validate_beamng_dir(new_mods_str, is_mods_dir=True)
+                    if is_valid:
+                        self.paths = resolved
+                        save_cached_paths(self.paths)
+                        print(f"\n{Colors.GREEN}✔ {msg}{Colors.RESET}")
+                    else:
+                        print(f"\n{Colors.RED}❌ {msg}{Colors.RESET}")
+                    pause_return()
+            elif choice == "3":
+                print(f"\n[*] Scanning system for BeamNG installations (AppData, Steam, Registry, Multi-drive)...")
+                clear_cached_paths()
+                new_paths = resolve_beamng_paths(use_cache=False, save_cache=True)
+                self.paths = new_paths
+                print(f"\n{Colors.GREEN}✔ Auto-discovery complete!{Colors.RESET}")
+                print(f"  Detected User Dir : {new_paths['user_dir']}")
+                print(f"  Detected Mods Dir : {new_paths['mods_dir']}")
+                pause_return()
+            elif choice == "4":
+                clear_cached_paths()
+                self.paths = resolve_beamng_paths(use_cache=False, save_cache=False)
+                print(f"\n{Colors.GREEN}✔ Paths reset to default auto-detection!{Colors.RESET}")
+                pause_return()
 
     # ==========================================================================
     # Dedicated Post-Fix Results Studio & Diagnostic Menu

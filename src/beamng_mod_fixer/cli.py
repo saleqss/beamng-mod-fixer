@@ -43,6 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
     # Path overrides
     paths_group = parser.add_argument_group("Path Configuration")
     paths_group.add_argument(
+        "-u", "--user-dir",
+        type=Path,
+        default=None,
+        help="Path to BeamNG root user directory (e.g. %%LOCALAPPDATA%%/BeamNG/BeamNG.drive/current).",
+    )
+    paths_group.add_argument(
         "-m", "--mods-dir",
         type=Path,
         default=None,
@@ -59,6 +65,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=None,
         help="Path to BeamNG temporary cache directory (temp/ or cache/).",
+    )
+    paths_group.add_argument(
+        "--show-paths",
+        action="store_true",
+        help="Display detected BeamNG directories and exit.",
     )
 
     # Actions
@@ -170,6 +181,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     # Resolve active paths
     paths = resolve_beamng_paths(
+        user_dir=args.user_dir,
         mods_dir=args.mods_dir,
         settings_dir=args.settings_dir,
         cache_dir=args.cache_dir,
@@ -178,6 +190,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     mods_dir = paths["mods_dir"]
     settings_dir = paths["settings_dir"]
     cache_dir = paths["cache_dir"]
+
+    if args.show_paths:
+        print("Detected BeamNG.drive Paths:")
+        print(f"  User Directory : {paths['user_dir']}")
+        print(f"  Mods Directory : {paths['mods_dir']}")
+        print(f"  Settings Dir   : {paths['settings_dir']}")
+        print(f"  Cache/Temp Dir : {paths['cache_dir']}")
+        return 0
 
     # Determine actions
     has_specific_action = (

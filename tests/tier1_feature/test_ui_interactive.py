@@ -144,3 +144,75 @@ def test_interactive_cli_view_detailed_diagnostics(tmp_path: Path, capsys: pytes
     assert "DETAILED MOD DIAGNOSTIC NOTICES" in out
     assert "my_mod.zip" in out
     assert "Unstable tire pressure" in out
+
+
+def test_interactive_cli_action_global_fix_pipeline(tmp_path: Path) -> None:
+    """Test action_global_fix runs the unified 7-stage pipeline and transitions to post-fix studio."""
+    user_dir = tmp_path / "user"
+    mods_dir = user_dir / "mods"
+    mods_dir.mkdir(parents=True)
+    settings_dir = user_dir / "settings"
+    settings_dir.mkdir()
+    temp_dir = user_dir / "temp"
+    temp_dir.mkdir()
+
+    # Create dummy mod archive
+    (mods_dir / "test_car.zip").write_bytes(b"PK\x05\x06" + b"\x00" * 18)
+
+    paths = {
+        "user_dir": user_dir,
+        "mods_dir": mods_dir,
+        "settings_dir": settings_dir,
+        "cache_dir": temp_dir,
+    }
+    cli = InteractiveCLI(paths=paths, dry_run=True)
+
+    # In menu_fix_results, input "1" to return to main menu
+    with mock.patch("builtins.input", return_value="1"):
+        cli.action_global_fix()
+
+
+def test_interactive_cli_menu_paths_manager(tmp_path: Path) -> None:
+    """Test menu_paths_manager options: return, custom user dir, custom mods dir, rescan, reset."""
+    user_dir = tmp_path / "user"
+    mods_dir = user_dir / "mods"
+    mods_dir.mkdir(parents=True)
+    settings_dir = user_dir / "settings"
+    settings_dir.mkdir()
+    temp_dir = user_dir / "temp"
+    temp_dir.mkdir()
+
+    paths = {
+        "user_dir": user_dir,
+        "mods_dir": mods_dir,
+        "settings_dir": settings_dir,
+        "cache_dir": temp_dir,
+    }
+    cli = InteractiveCLI(paths=paths, dry_run=True)
+
+    # 1. Option 0: Return
+    with mock.patch("builtins.input", return_value="0"):
+        cli.menu_paths_manager()
+
+    # 2. Option 1: Custom user directory
+    new_user = tmp_path / "custom_user"
+    new_user.mkdir()
+    with mock.patch("builtins.input", side_effect=["1", str(new_user), "", "0"]):
+        cli.menu_paths_manager()
+    assert cli.paths["user_dir"].resolve() == new_user.resolve()
+
+    # 3. Option 2: Custom mods directory
+    new_mods = tmp_path / "custom_mods"
+    new_mods.mkdir()
+    with mock.patch("builtins.input", side_effect=["2", str(new_mods), "", "0"]):
+        cli.menu_paths_manager()
+    assert cli.paths["mods_dir"].resolve() == new_mods.resolve()
+
+    # 4. Option 3: Re-scan
+    with mock.patch("builtins.input", side_effect=["3", "", "0"]):
+        cli.menu_paths_manager()
+
+    # 5. Option 4: Reset
+    with mock.patch("builtins.input", side_effect=["4", "", "0"]):
+        cli.menu_paths_manager()
+

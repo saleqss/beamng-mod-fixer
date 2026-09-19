@@ -35,7 +35,19 @@ from beamng_mod_fixer.core.materials_fixer import (
     fix_materials_json_content,
     parse_materials_cs,
 )
-from beamng_mod_fixer.core.path_resolver import detect_beamng_user_dir, resolve_beamng_paths
+from beamng_mod_fixer.core.path_resolver import (
+    clear_cached_paths,
+    detect_beamng_user_dir,
+    find_candidate_user_dirs,
+    find_drive_root_candidates,
+    find_steam_beamng_dirs,
+    get_cache_config_path,
+    load_cached_paths,
+    resolve_beamng_paths,
+    save_cached_paths,
+    score_candidate_user_dir,
+    validate_beamng_dir,
+)
 from beamng_mod_fixer.core.sound_fixer import fix_sound_content
 from beamng_mod_fixer.core.zip_processor import is_archive_encrypted, process_mod_archive, scan_and_fix_mods
 from beamng_mod_fixer.exceptions import (
@@ -93,10 +105,19 @@ __all__ = [
     "process_mod_archive",
     "scan_and_fix_mods",
     "clean_shader_cache",
+    "clear_cached_paths",
+    "detect_beamng_user_dir",
+    "find_candidate_user_dirs",
+    "find_drive_root_candidates",
+    "find_steam_beamng_dirs",
+    "get_cache_config_path",
+    "load_cached_paths",
     "optimize_settings",
     "restore_settings_backup",
-    "detect_beamng_user_dir",
     "resolve_beamng_paths",
+    "save_cached_paths",
+    "score_candidate_user_dir",
+    "validate_beamng_dir",
     "is_archive_encrypted",
     "OPTIMIZATION_PRESETS",
     "InteractiveCLI",
