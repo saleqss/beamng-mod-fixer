@@ -90,6 +90,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Scan and fix broken headlights (lightCastShadows) and optics in mod archives.",
     )
     actions_group.add_argument(
+        "--fix-rear-lights",
+        action="store_true",
+        help="Enhance rear lights (reverse, brake, tail lights) to brightly illuminate the road/ground.",
+    )
+    actions_group.add_argument(
         "--fix-materials",
         action="store_true",
         help="Convert materials.cs to modern JSON 1.5 and repair texture paths (fix NO TEXTURE).",
@@ -233,6 +238,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # Determine actions
     has_specific_action = (
         args.fix_mods
+        or args.fix_rear_lights
         or args.fix_materials
         or args.fix_drivetrain
         or args.fix_sound
@@ -251,6 +257,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print_splash_banner()
 
     run_mods = args.fix_mods or args.all or not has_specific_action
+    run_rear_lights = args.fix_rear_lights or args.all or not has_specific_action
     run_materials = args.fix_materials or args.all or not has_specific_action
     run_drivetrain = args.fix_drivetrain or args.all or not has_specific_action
     run_sound = args.fix_sound or args.all or not has_specific_action
@@ -263,7 +270,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     success = True
 
     # Action 1: Mod Scanning & Multi-Domain Repair
-    if run_mods or run_materials or run_drivetrain or run_sound or run_lua:
+    if run_mods or run_rear_lights or run_materials or run_drivetrain or run_sound or run_lua:
         mode_tag = " (smart selective)" if selective_fix else " (legacy)"
         if not args.quiet:
             print(f"\n[*] Scanning & fixing mods in: {mods_dir}{mode_tag}{dry_run_tag}")
@@ -272,6 +279,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 mods_dir,
                 dry_run=args.dry_run,
                 selective=selective_fix,
+                fix_rear_lights=run_rear_lights,
                 fix_materials=run_materials,
                 fix_drivetrain=run_drivetrain,
                 fix_sound=run_sound,
@@ -299,6 +307,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"  JBeam files inspected     : {summary.jbeams_inspected}")
                 print(f"  JBeam files modified      : {summary.jbeams_fixed}")
                 print(f"  Headlight shadows fixed   : {summary.shadows_fixed}")
+                print(f"  Rear lights enhanced      : {summary.rear_lights_fixed}")
                 print(f"  materials.cs converted    : {summary.materials_converted}")
                 print(f"  materials.json repaired   : {summary.materials_fixed}")
                 print(f"  Drivetrain & diff repaired: {summary.drivetrains_fixed}")

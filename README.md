@@ -3,10 +3,10 @@
 [![CI](https://github.com/saleqss/beamng-mod-fixer/actions/workflows/ci.yml/badge.svg)](https://github.com/saleqss/beamng-mod-fixer/actions)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-251%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
+[![Tests](https://img.shields.io/badge/tests-259%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
 [![BeamNG Compatibility](https://img.shields.io/badge/BeamNG.drive-0.30%20--%200.34%2B-orange)](https://beamng.com)
 
-> **The all-in-one community standard toolkit for BeamNG.drive.** Automatically resolves **all major mod breakages** after game updates (0.30 - 0.34+): pitch-black headlights, orange `"NO TEXTURE"`, broken `materials.cs`, frozen vehicles & exploding differentials, tire blowouts (`pressurePSI`), silent engines & pre-FMOD audio crashes, and fatal vehicle Lua errors. Deploys cinematic high-FPS graphics presets and cleans corrupt shader caches.
+> **The all-in-one community standard toolkit for BeamNG.drive.** Automatically resolves **all major mod breakages** after game updates (0.30 - 0.34+): pitch-black headlights, non-illuminating rear & reverse lights, orange `"NO TEXTURE"`, pixelated liveries, broken `materials.cs`, frozen vehicles & exploding differentials, tire blowouts (`pressurePSI`), silent engines & pre-FMOD audio crashes, and fatal vehicle Lua errors. Deploys cinematic high-FPS graphics presets and cleans corrupt shader caches.
 
 *Читать на русском языке: [README_RU.md](README_RU.md)*
 
@@ -21,7 +21,7 @@
 ║  ╚██████╔╝██████╔╝███████╗██║  ██║██║ ╚═╝ ██║   ██║     ██║██╔╝ ██╗                    ║
 ║   ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝   ╚═╝     ╚═╝╚═╝  ╚═╝                    ║
 ║                                                                                        ║
-║               ⚡ ULTIMATE GLOBAL MOD FIXER & GRAPHICS OPTIMIZER v1.1.0 ⚡               ║
+║               ⚡ ULTIMATE GLOBAL MOD FIXER & GRAPHICS OPTIMIZER v1.2.0 ⚡               ║
 ║                 BeamNG.drive 0.30 - 0.34+ Adaptive Community Standard                  ║
 ╚════════════════════════════════════════════════════════════════════════════════════════╝
 ```
@@ -57,14 +57,17 @@ agy-gbeam-fix
 
 ## 🌐 Full Spectrum of Problems Fixed by GBEAM FIX
 
-BeamNG.drive updates (0.30 through 0.34+) overhauled graphics, lighting, materials, and powertrain architectures. Legacy mods authored for older versions suffer from fatal breaks across six major domains:
+BeamNG.drive updates (0.30 through 0.34+) overhauled graphics, lighting, materials, and powertrain architectures. Legacy mods authored for older versions suffer from fatal breaks across several major domains:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                                GBEAM FIX REPAIR DOMAINS                                │
 ├────────────────────────┬───────────────────────────────────────────────────────────────┤
-│ 💡 Optics & Lighting   │ Self-shadow bumper blackout, inverted cone angles, cookie     │
+│ 💡 Front Headlights    │ Self-shadow bumper blackout, inverted cone angles, cookie     │
 │                        │ path 404s, obsolete flare names, missing emissive glow         │
+├────────────────────────┼───────────────────────────────────────────────────────────────┤
+│ 🚨 Rear Ground Light   │ Reverse lights (crisp white flood), brake lights (vivid red   │
+│                        │ road wash), taillights (soft road wash), cookie cutoff purge  │
 ├────────────────────────┼───────────────────────────────────────────────────────────────┤
 │ 🎨 Materials & Textures│ Orange "NO TEXTURE", legacy materials.cs -> 1.5 JSON,         │
 │                        │ Windows backslash '\' path fixes, VFS texture reconciliation  │
@@ -78,8 +81,8 @@ BeamNG.drive updates (0.30 through 0.34+) overhauled graphics, lighting, materia
 │ 🛡️ Vehicle Lua Guard   │ Deprecated obj:queueGameEngineLua, unguarded v.data accesses, │
 │                        │ preventing fatal script crash on vehicle spawn                │
 ├────────────────────────┼───────────────────────────────────────────────────────────────┤
-│ 🚀 Graphics & FPS      │ 60FPS fast dynamic reflections (facesPerUpdate: 2, 512px),     │
-│                        │ soft shadows without CPU draw-call spikes, shader purge       │
+│ 🚀 Graphics & FPS      │ Native uncompressed textures (16x anisotropic, detailAdjust 2)│
+│                        │ 60FPS fast dynamic reflections (facesPerUpdate: 3), cache purge│
 └────────────────────────┴───────────────────────────────────────────────────────────────┘
 ```
 
@@ -103,6 +106,25 @@ GBEAM FIX implements **context-aware selective fixing**:
 - **Inverted Angles**: If `lightInnerAngle >= lightOuterAngle`, the Torque3D falloff equation divides by zero or evaluates negative, turning off the light. GBEAM FIX repairs the angle ratio to standard geometry.
 - **Modern Cookies**: Replaces dead pre-PBR cookies (`art/shapes/lights/*`) with official `art/special/BNG_light_cookie_headlight.dds`.
 - **Flare Modernization**: Updates legacy `headlightFlare` to official `vehicleHeadLightFlare`.
+
+---
+
+## 🚨 Rear Lights Ground Illumination: Road Wash for Reverse, Brake & Taillights
+
+In many popular vehicle mods (including Cadillac Escalade, BMW, Nissan, Audi, Toyota, etc.), **rear lights appear lit on the body but cast zero light onto the ground or environment behind the car**.
+
+### Why Rear Lights Didn't Illuminate the Ground:
+1. **Microscopic Legacy Brightness**: Ports from pre-PBR BeamNG versions retained tiny `lightBrightness` values ($0.02 - 0.07$) and restricted range ($6 - 8\text{m}$). In modern physical rendering, these values produce zero perceptible photons on asphalt.
+2. **Obsolete Headlight Cookies**: Many reverse light fixtures referenced `BNG_light_cookie_headlight.dds`. Headlight cookies contain sharp asymmetric cutoff masks designed for lowbeam headlights, which completely blocked diffuse rear illumination.
+3. **Occluding Self-Shadows**: When `lightCastShadows: true` is left on rear lamps, the tailgate, trunk lip, or rear bumper casts an impenetrable self-shadow that completely eclipses the ground beneath and behind the car.
+4. **Syntax Comma Errors**: Missing commas between props and beam rows frequently caused BeamNG's JBeam compiler to silently discard rear spotlight definitions entirely.
+
+### GBEAM FIX Rear Light Enhancement Engine:
+- **Reverse Lights**: Boosted to `lightBrightness: 1.2` with `lightRange: 16.0m` and clean white tint (`rgb: 255, 255, 255`), casting a crisp, bright flood of light across the road when reversing in the dark.
+- **Brake Lights**: Enhanced to `lightBrightness: 0.85` with `lightRange: 14.0m` and rich red road wash (`rgb: 255, 30, 20`).
+- **Taillights / Parking**: Tuned to `lightBrightness: 0.35` with `lightRange: 14.0m` for an authentic nighttime ambient glow behind the car.
+- **Cookie Neutralization**: Strips directional cutoff cookies from rear lamps to ensure conical, even ground spread.
+- **Self-Shadow Disabling**: Enforces `lightCastShadows: false` specifically on rear fixtures, guaranteeing that no bumper self-occlusion prevents the road from lighting up.
 
 ---
 

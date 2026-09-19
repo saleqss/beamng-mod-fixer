@@ -124,3 +124,21 @@ def test_corrupted_json_raises_settings_error(tmp_path: Path) -> None:
     with pytest.raises((SettingsCorruptedError, json.JSONDecodeError)):
         optimize_settings(settings_dir, preset="balanced")
 
+
+def test_texture_quality_and_anisotropic_settings(tmp_path: Path) -> None:
+    """Test that ultra-max-fps preset sets GraphicTextureQuality to Normal and Video prefs."""
+    settings_dir = tmp_path / "settings"
+    s_file, gs_file = create_synthetic_settings_files(settings_dir)
+
+    result = optimize_settings(settings_dir, preset="ultra-max-fps")
+    assert result.success is True
+
+    s_data = json.loads(s_file.read_text(encoding="utf-8"))
+    assert s_data["GraphicTextureQuality"] == "Normal"
+    assert s_data["GraphicAnisotropic"] == 16
+
+    gs_data = json.loads(gs_file.read_text(encoding="utf-8"))
+    assert gs_data["$pref"]["Video"]["textureReductionLevel"] == 0
+    assert gs_data["$pref"]["Video"]["defaultAnisotropy"] == 16
+
+

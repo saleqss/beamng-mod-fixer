@@ -76,6 +76,7 @@ class ModArchiveReport:
     jbeams_inspected: int = 0
     jbeams_modified: int = 0
     shadows_fixed: int = 0
+    rear_lights_fixed: int = 0
     materials_converted: int = 0
     materials_fixed: int = 0
     drivetrains_fixed: int = 0
@@ -99,6 +100,7 @@ class ModArchiveReport:
             "jbeams_inspected": self.jbeams_inspected,
             "jbeams_modified": self.jbeams_modified,
             "shadows_fixed": self.shadows_fixed,
+            "rear_lights_fixed": self.rear_lights_fixed,
             "materials_converted": self.materials_converted,
             "materials_fixed": self.materials_fixed,
             "drivetrains_fixed": self.drivetrains_fixed,
@@ -167,6 +169,7 @@ class OverallSummary:
     jbeams_inspected: int = 0
     jbeams_fixed: int = 0
     shadows_fixed: int = 0
+    rear_lights_fixed: int = 0
     materials_converted: int = 0
     materials_fixed: int = 0
     drivetrains_fixed: int = 0
@@ -197,6 +200,7 @@ class OverallSummary:
             "jbeams_inspected": self.jbeams_inspected,
             "jbeams_fixed": self.jbeams_fixed,
             "shadows_fixed": self.shadows_fixed,
+            "rear_lights_fixed": self.rear_lights_fixed,
             "materials_converted": self.materials_converted,
             "materials_fixed": self.materials_fixed,
             "drivetrains_fixed": self.drivetrains_fixed,

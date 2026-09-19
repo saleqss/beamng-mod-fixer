@@ -176,4 +176,16 @@ def test_cli_save_paths_flag(tmp_path: Path) -> None:
         clear_cached_paths()
 
 
+def test_cli_fix_rear_lights_flag(tmp_path: Path) -> None:
+    """Test running --fix-rear-lights flag on mod archive."""
+    mods_dir = tmp_path / "mods"
+    p = mods_dir / "mod_test.zip"
+    create_realistic_mod_zip(p, "cli_car")
+
+    res = run_cli("--mods-dir", str(mods_dir), "--fix-rear-lights")
+    assert res.returncode == 0
+    assert "rear lights" in res.stdout.lower() or "summary" in res.stdout.lower()
+
+
+
 

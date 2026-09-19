@@ -10,7 +10,7 @@ A high-performance Python utility and community engine for BeamNG.drive that fix
 - 60FPS fast reflections, soft shadows, and shader cache cleaning
 """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __author__ = "BeamNG Modding Tools Team"
 
 from beamng_mod_fixer.core.cache_cleaner import clean_shader_cache
@@ -48,6 +48,7 @@ from beamng_mod_fixer.core.path_resolver import (
     score_candidate_user_dir,
     validate_beamng_dir,
 )
+from beamng_mod_fixer.core.rear_light_fixer import enhance_rear_light_content
 from beamng_mod_fixer.core.sound_fixer import fix_sound_content
 from beamng_mod_fixer.core.zip_processor import is_archive_encrypted, process_mod_archive, scan_and_fix_mods
 from beamng_mod_fixer.exceptions import (
@@ -91,6 +92,7 @@ __all__ = [
     # Core Fixer APIs
     "fix_jbeam_content",
     "smart_fix_jbeam_content",
+    "enhance_rear_light_content",
     "patch_jbeam_text",
     "detect_light_cast_shadows",
     "audit_spotlights",

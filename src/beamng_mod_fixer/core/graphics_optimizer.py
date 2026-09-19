@@ -48,7 +48,7 @@ OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
             "GraphicShadowsQuality": "Ultra",
             "GraphicTerrainQuality": "Ultra",
             "GraphicCloudsQuality": "Ultra",
-            "GraphicTextureQuality": "High",
+            "GraphicTextureQuality": "Normal",
             "GraphicAnisotropic": 16,
             "GraphicAntialias": 4,
             "GraphicAntialiasType": "smaa",
@@ -72,6 +72,10 @@ OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
             "PostFXMotionBlurEnabled": False,
         },
         "game_settings": {
+            "Video": {
+                "textureReductionLevel": 0,
+                "defaultAnisotropy": 16,
+            },
             "BeamNGVehicle": {
                 "dynamicReflection": {
                     "enabled": True,
@@ -136,7 +140,7 @@ OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
             "GraphicClusteredQuality": "High",
             "GraphicMaxDecalCount": 8000,
             "GraphicMeshQuality": "High",
-            "GraphicTextureQuality": "High",
+            "GraphicTextureQuality": "Normal",
             "GraphicTerrainQuality": "High",
             "GraphicGrassDensity": 0.85,
             "GraphicAnisotropic": 16,
@@ -150,6 +154,10 @@ OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
             "PostFXLightRaysEnabled": True,
         },
         "game_settings": {
+            "Video": {
+                "textureReductionLevel": 0,
+                "defaultAnisotropy": 16,
+            },
             "BeamNGVehicle": {
                 "dynamicReflection": {
                     "enabled": True,
@@ -219,6 +227,10 @@ OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
             "PostFXLightRaysEnabled": True,
         },
         "game_settings": {
+            "Video": {
+                "textureReductionLevel": 0,
+                "defaultAnisotropy": 16,
+            },
             "BeamNGVehicle": {
                 "dynamicReflection": {
                     "enabled": True,
@@ -330,7 +342,7 @@ OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
             "GraphicLightingQuality": "High",
             "GraphicMaxDecalCount": 10000,
             "GraphicMeshQuality": "High",
-            "GraphicTextureQuality": "High",
+            "GraphicTextureQuality": "Normal",
             "GraphicTerrainQuality": "High",
             "GraphicGrassDensity": 1.0,
             "GraphicAnisotropic": 16,
@@ -338,6 +350,10 @@ OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
             "GraphicAntialiasType": "smaa",
         },
         "game_settings": {
+            "Video": {
+                "textureReductionLevel": 0,
+                "defaultAnisotropy": 16,
+            },
             "BeamNGVehicle": {
                 "dynamicReflection": {
                     "enabled": True,

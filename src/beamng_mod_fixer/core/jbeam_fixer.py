@@ -9,6 +9,7 @@ import codecs
 import re
 from typing import List, Optional, Set, Tuple
 
+from beamng_mod_fixer.core.rear_light_fixer import enhance_rear_light_content
 from beamng_mod_fixer.models import DiagnosticNotice, JBeamFixResult
 
 
@@ -615,6 +616,7 @@ def fix_jbeam_content(
     modernize_flares: bool = True,
     normalize_electrics: bool = True,
     repair_angles: bool = True,
+    fix_rear_lights: bool = False,
 ) -> Tuple[str, int, List[DiagnosticNotice]]:
     """Fix broken headlight self-shadow occlusion and normalize optics in JBeam text.
 
@@ -892,6 +894,12 @@ def fix_jbeam_content(
                 continue
             diagnostics.append(d)
 
+    # 7. Rear Lighting Enhancement & Ground Illumination
+    if fix_rear_lights:
+        text, rear_count, rear_diags = enhance_rear_light_content(text, filename=filename)
+        fix_count += rear_count
+        diagnostics.extend(rear_diags)
+
     # If no modifications were made, return original content object and fix_count=0
     if fix_count == 0 and text == content:
         return content, 0, diagnostics
@@ -903,6 +911,7 @@ def smart_fix_jbeam_content(
     content: str,
     filename: str = "",
     available_files: Optional[Set[str]] = None,
+    fix_rear_lights: bool = True,
 ) -> Tuple[str, int, List[DiagnosticNotice]]:
     """Intelligently fix BeamNG JBeam vehicle optics with 100% precision.
 
@@ -912,6 +921,7 @@ def smart_fix_jbeam_content(
     - Modernizes legacy flares (headlightFlare -> vehicleHeadLightFlare).
     - Corrects misspelled electrics signals in spotlight rows (low_beam -> lowbeam).
     - Repairs inverted spotlight cone angles (innerAngle > outerAngle).
+    - Enhances rear lighting (reverse, brake, taillights) for realistic ground illumination.
     """
     return fix_jbeam_content(
         content=content,
@@ -923,6 +933,7 @@ def smart_fix_jbeam_content(
         modernize_flares=True,
         normalize_electrics=True,
         repair_angles=True,
+        fix_rear_lights=fix_rear_lights,
     )
 
 

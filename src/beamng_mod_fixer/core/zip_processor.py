@@ -37,6 +37,7 @@ from beamng_mod_fixer.core.materials_fixer import (
     convert_materials_cs_to_json,
     fix_materials_json_content,
 )
+from beamng_mod_fixer.core.rear_light_fixer import enhance_rear_light_content
 from beamng_mod_fixer.core.sound_fixer import fix_sound_content
 from beamng_mod_fixer.exceptions import (
     ArchiveCorruptedError,
@@ -122,6 +123,7 @@ def process_mod_archive(
     dry_run: bool = False,
     enable_diagnostics: bool = True,
     selective: bool = False,
+    fix_rear_lights: bool = True,
     fix_materials: bool = True,
     fix_drivetrain: bool = True,
     fix_sound: bool = True,
@@ -266,6 +268,17 @@ def process_mod_archive(
                             file_modified = True
                             report.shadows_fixed += fix_count
                             report.diagnostics.extend(diags)
+
+                        # Pass 1b: Rear Lighting Enhancement & Ground Illumination
+                        if fix_rear_lights:
+                            fixed_text, rear_count, rear_diags = enhance_rear_light_content(
+                                fixed_text,
+                                filename=entry.filename,
+                            )
+                            if rear_count > 0 or fixed_text != text:
+                                file_modified = True
+                                report.rear_lights_fixed += rear_count
+                                report.diagnostics.extend(rear_diags)
 
                         # Pass 2: Drivetrain & Physics
                         if fix_drivetrain:
@@ -541,6 +554,7 @@ def scan_and_fix_mods(
     progress_callback: Optional[Callable[[Path, ModArchiveReport, int, int], None]] = None,
     max_workers: Optional[int] = None,
     selective: bool = False,
+    fix_rear_lights: bool = True,
     fix_materials: bool = True,
     fix_drivetrain: bool = True,
     fix_sound: bool = True,
@@ -556,6 +570,7 @@ def scan_and_fix_mods(
                            Signature: callback(path, report, index, total_count)
         max_workers: Maximum number of worker threads for parallel archive processing.
         selective: If True, uses smart selective fixing to protect highbeams and modernize cookies.
+        fix_rear_lights: If True, enhances rear lights (reverse, brake, taillights) for road illumination.
         fix_materials: If True, converts materials.cs and repairs materials.json.
         fix_drivetrain: If True, repairs differentials, tire pressures, and clutch parameters.
         fix_sound: If True, modernizes legacy audio paths to BeamNG FMOD events.
@@ -589,6 +604,7 @@ def scan_and_fix_mods(
             zp,
             dry_run=is_dry,
             selective=selective,
+            fix_rear_lights=fix_rear_lights,
             fix_materials=fix_materials,
             fix_drivetrain=fix_drivetrain,
             fix_sound=fix_sound,
@@ -603,6 +619,7 @@ def scan_and_fix_mods(
             summary.jbeams_inspected += report.jbeams_inspected
             summary.jbeams_fixed += report.jbeams_modified
             summary.shadows_fixed += report.shadows_fixed
+            summary.rear_lights_fixed += report.rear_lights_fixed
             summary.materials_converted += report.materials_converted
             summary.materials_fixed += report.materials_fixed
             summary.drivetrains_fixed += report.drivetrains_fixed
@@ -649,6 +666,7 @@ def scan_and_fix_mods(
                 summary.jbeams_inspected += report.jbeams_inspected
                 summary.jbeams_fixed += report.jbeams_modified
                 summary.shadows_fixed += report.shadows_fixed
+                summary.rear_lights_fixed += report.rear_lights_fixed
                 summary.materials_converted += report.materials_converted
                 summary.materials_fixed += report.materials_fixed
                 summary.drivetrains_fixed += report.drivetrains_fixed

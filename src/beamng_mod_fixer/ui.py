@@ -219,11 +219,12 @@ class InteractiveCLI:
 
         # Mod Scan & Multi-Domain Repair (Stages 1 to 5)
         print(f"{Colors.BOLD}{Colors.CYAN}[Stages 1-5/7]{Colors.RESET} {Colors.WHITE}Comprehensive Mod Archives Repair Pipeline:{Colors.RESET}")
-        print(f"  {Colors.CYAN}1. Headlights & Optics Fix{Colors.RESET}       (Selective lowbeams, cookie modernizer, angle repair)")
-        print(f"  {Colors.YELLOW}2. Materials & Texture Doctor{Colors.RESET}    (materials.cs -> 1.5 JSON, resolves orange NO TEXTURE)")
-        print(f"  {Colors.MAGENTA}3. Drivetrain & Physics Repair{Colors.RESET}   (Unfreezes differentials, clamps tire pressures)")
-        print(f"  {Colors.WHITE}4. Sound Modernizer{Colors.RESET}              (Pre-FMOD audio paths -> BeamNG FMOD sound events)")
-        print(f"  {Colors.GREEN}5. Lua Safety Guard{Colors.RESET}              (Guards deprecated vehicle Lua calls from crashes)")
+        print(f"  {Colors.CYAN}1. Headlights & Front Optics{Colors.RESET}   (Selective lowbeams, cookie modernizer, angle repair)")
+        print(f"  {Colors.RED}2. Rear Lights Ground Light{Colors.RESET}    (Reverse, brake & taillights road wash illumination)")
+        print(f"  {Colors.YELLOW}3. Materials & Texture Doctor{Colors.RESET} (materials.cs -> 1.5 JSON, resolves orange NO TEXTURE)")
+        print(f"  {Colors.MAGENTA}4. Drivetrain & Physics Repair{Colors.RESET}(Unfreezes differentials, clamps tire pressures)")
+        print(f"  {Colors.WHITE}5. Sound Modernizer{Colors.RESET}           (Pre-FMOD audio paths -> BeamNG FMOD sound events)")
+        print(f"  {Colors.GREEN}6. Lua Safety Guard{Colors.RESET}           (Guards deprecated vehicle Lua calls from crashes)")
         print(f"  {Colors.DIM}Target Folder: {self.paths['mods_dir']}{Colors.RESET}\n")
 
         def _progress_cb(p: Path, r: Any, idx: int, tot: int) -> None:
@@ -231,6 +232,8 @@ class InteractiveCLI:
                 details = []
                 if r.shadows_fixed:
                     details.append(f"Optics: {r.shadows_fixed}")
+                if r.rear_lights_fixed:
+                    details.append(f"Rear lights: {r.rear_lights_fixed}")
                 if r.materials_converted or r.materials_fixed:
                     details.append(f"Mats: {r.materials_converted + r.materials_fixed}")
                 if r.drivetrains_fixed:
@@ -260,6 +263,7 @@ class InteractiveCLI:
                 mods_dir,
                 dry_run=self.dry_run,
                 selective=True,
+                fix_rear_lights=True,
                 fix_materials=True,
                 fix_drivetrain=True,
                 fix_sound=True,
@@ -320,9 +324,10 @@ class InteractiveCLI:
             print(f"  [1] Smart Selective Fix (Recommended: fixes lowbeams, preserves highbeams, modernizes cookies)")
             print(f"  [2] Force Legacy Fix (Forces lightCastShadows: false everywhere)")
             print(f"  [3] Normalize Spotlight Angles & Brightness Only")
+            print(f"  [4] Enhance Rear Lights Ground Illumination (Reverse, Brake & Taillight Road Wash)")
             print(f"  [0] Return to Main Menu")
 
-            choice = input(f"\n{Colors.BOLD}Select an option [0-3]: {Colors.RESET}").strip()
+            choice = input(f"\n{Colors.BOLD}Select an option [0-4]: {Colors.RESET}").strip()
             if choice == "0":
                 return
             elif choice in ("1", "2"):
@@ -332,6 +337,7 @@ class InteractiveCLI:
                     self.paths["mods_dir"],
                     dry_run=self.dry_run,
                     selective=selective,
+                    fix_rear_lights=True,
                     fix_materials=False,
                     fix_drivetrain=False,
                     fix_sound=False,
@@ -345,12 +351,27 @@ class InteractiveCLI:
                     self.paths["mods_dir"],
                     dry_run=self.dry_run,
                     selective=True,
+                    fix_rear_lights=False,
                     fix_materials=False,
                     fix_drivetrain=False,
                     fix_sound=False,
                     fix_lua=False,
                 )
                 self.menu_fix_results(summary, title="OPTICS NORMALIZATION REPORT")
+                return
+            elif choice == "4":
+                print("\n[*] Enhancing rear lights (reverse, brake, tail lights) for ground illumination...")
+                summary = scan_and_fix_mods(
+                    self.paths["mods_dir"],
+                    dry_run=self.dry_run,
+                    selective=True,
+                    fix_rear_lights=True,
+                    fix_materials=False,
+                    fix_drivetrain=False,
+                    fix_sound=False,
+                    fix_lua=False,
+                )
+                self.menu_fix_results(summary, title="REAR LIGHTS GROUND ILLUMINATION REPORT")
                 return
 
     # ==========================================================================
@@ -720,6 +741,7 @@ class InteractiveCLI:
         print(f"  Modified (fixed) archives    : {Colors.GREEN}{summary.modified_archives}{Colors.RESET}")
         print(f"  Already clean archives       : {Colors.WHITE}{summary.clean_archives}{Colors.RESET}")
         print(f"  Headlight shadows fixed      : {Colors.GREEN}{summary.shadows_fixed}{Colors.RESET}")
+        print(f"  Rear lights ground wash fixed: {Colors.GREEN}{summary.rear_lights_fixed}{Colors.RESET}")
         print(f"  materials.cs converted       : {Colors.GREEN}{summary.materials_converted}{Colors.RESET}")
         print(f"  materials.json textures fixed: {Colors.GREEN}{summary.materials_fixed}{Colors.RESET}")
         print(f"  Drivetrain & physics repaired: {Colors.GREEN}{summary.drivetrains_fixed}{Colors.RESET}")
