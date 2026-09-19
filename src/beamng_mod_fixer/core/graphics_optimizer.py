@@ -38,6 +38,85 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 
 OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
+    "ultra-max-fps": {
+        "settings": {
+            "GraphicOverallQuality": "Ultra",
+            "GraphicLightingQuality": "Ultra",
+            "GraphicClusteredQuality": "Ultra",
+            "GraphicMeshQuality": "Ultra",
+            "GraphicShadowQuality": "Ultra",
+            "GraphicShadowsQuality": "Ultra",
+            "GraphicTerrainQuality": "Ultra",
+            "GraphicCloudsQuality": "Ultra",
+            "GraphicTextureQuality": "High",
+            "GraphicAnisotropic": 16,
+            "GraphicAntialias": 4,
+            "GraphicAntialiasType": "smaa",
+            "GraphicGrassDensity": 1.0,
+            "GraphicMaxDecalCount": 8000,
+            "GraphicDisableShadows": "0",
+            "GraphicDynReflection": True,
+            "GraphicDynReflectionEnabled": True,
+            "GraphicDynReflectionTexsize": 3,
+            "GraphicDynReflectionDistance": 500,
+            "GraphicDynReflectionDetail": 1.0,
+            "GraphicDynReflectionFacesPerupdate": 3,
+            "GraphicDynMirrorsEnabled": True,
+            "GraphicDynMirrorsTexsize": 2,
+            "GraphicDynMirrorsDetail": 1.0,
+            "GraphicDynMirrorsDistance": 400,
+            "PostFXSSAOGeneralEnabled": True,
+            "PostFXScreenSpaceShadowsEnabled": True,
+            "PostFXLightRaysEnabled": True,
+            "PostFXDOFGeneralEnabled": True,
+            "PostFXMotionBlurEnabled": False,
+        },
+        "game_settings": {
+            "BeamNGVehicle": {
+                "dynamicReflection": {
+                    "enabled": True,
+                    "facesPerUpdate": 3,
+                    "textureSize": 1024,
+                    "detail": 1.0,
+                    "distance": 500,
+                    "debugEnabled": False,
+                },
+                "dynamicMirrors": {
+                    "enabled": True,
+                    "textureSize": 1024,
+                    "detail": 1.0,
+                    "distance": 400,
+                },
+            },
+            "Shadows": {
+                "textureScalar": 4,
+                "filterMode": 1,
+                "disable": 0,
+            },
+            "Terrain": {
+                "lodScale": 1.0,
+                "detailScale": 2.0,
+            },
+            "GroundCover": {
+                "densityScale": 1.0,
+            },
+            "Reflect": {
+                "maxLights": 8,
+                "deferredLighting": True,
+                "depthPrepass": True,
+                "frameLimitMS": 0,
+                "refractTexScale": 1,
+            },
+            "TS": {
+                "maxDecalCount": 8000,
+                "detailAdjust": 2,
+                "skipRenderDLs": 0,
+            },
+            "Decals": {
+                "enabled": True,
+            },
+        },
+    },
     "cinematic-fast": {
         "settings": {
             "GraphicDynReflection": True,
@@ -470,7 +549,7 @@ def restore_settings_backup(
 
 def optimize_settings(
     settings_path: Path,
-    preset: str = "balanced",
+    preset: str = "ultra-max-fps",
     backup: bool = True,
     dry_run: bool = False,
 ) -> OptimizationResult:

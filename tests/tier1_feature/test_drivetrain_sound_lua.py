@@ -73,21 +73,22 @@ def test_sound_obsolete_paths_modernized() -> None:
 
 
 def test_lua_vdata_and_queue_guarded() -> None:
-    """Test that unguarded v.data and deprecated obj:queueGameEngineLua are guarded."""
-    lua_code = """
+    """Test that toxic preambles and broken engine bridge wrappers are safely sanitized."""
+    lua_code = """-- [GBEAM FIX] Guard against uninitialized vehicle globals
+local v = v or { data = {} }
 local M = {}
 function M.init()
     local val = v.data.engineSpeed
-    obj:queueGameEngineLua("guihooks.trigger('test')")
-    guihooks.trigger('gaugeUpdate', 100)
+    (obj.queueGameEngineLua and obj:queueGameEngineLua or function(...) end)("guihooks.trigger('test')")
+    (guihooks and guihooks.trigger or function(...) end)('gaugeUpdate', 100)
 end
 return M
 """
     fixed, count, diags = fix_lua_content(lua_code)
     assert count >= 2
-    assert "local v = v or" in fixed
-    assert "obj.queueGameEngineLua" in fixed
-    assert "guihooks and guihooks.trigger" in fixed
+    assert "local v = v or" not in fixed
+    assert "obj:queueGameEngineLua(" in fixed
+    assert "guihooks.trigger(" in fixed
 
 
 def test_drivetrain_quoted_and_low_psi() -> None:
@@ -126,13 +127,15 @@ def test_sound_horn_and_context_mapping() -> None:
 
 
 def test_lua_electrics_table_guard() -> None:
-    """Test that electrics table is guarded in Lua scripts."""
-    lua = """
-    local function update(dt)
-        local val = electrics.values.headlight
-    end
-    """
+    """Test that toxic electrics shadowing preamble is purged while preserving electrics table access."""
+    lua = """-- [GBEAM FIX] Guard against uninitialized vehicle globals
+local electrics = electrics or { values = {} }
+local function update(dt)
+    local val = electrics.values.headlight
+end
+"""
     fixed, count, diags = fix_lua_content(lua)
     assert count > 0
-    assert "electrics" in fixed
+    assert "local electrics = electrics or" not in fixed
+    assert "electrics.values.headlight" in fixed
 

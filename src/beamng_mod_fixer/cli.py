@@ -136,7 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
     options_group.add_argument(
         "--preset",
         choices=list(OPTIMIZATION_PRESETS.keys()),
-        default="cinematic-fast",
+        default="ultra-max-fps",
         help="Graphics optimization preset (default: %(default)s).",
     )
     options_group.add_argument(

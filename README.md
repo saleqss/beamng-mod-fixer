@@ -142,7 +142,8 @@ GBEAM FIX provides tailored, balanced presets:
 
 | Preset | Dynamic Reflections | Reflection TexSize | Dynamic Mirrors | Shadow Tuning | Target Hardware |
 |---|---|---|---|---|---|
-| **`cinematic-fast`** (Default) | 2 faces / update | 512 px | 512 px (1 face) | Soft High, balanced cascades | High-end / 60-144 FPS smooth |
+| **`ultra-max-fps`** (Default) | 3 faces / update | 1024 px (Full Ultra) | 1024 px (100% Ultra) | 4x Resolution, Soft Shadows, SSAO | High-end / RTX / 2K-4K / 0 Visual Degradation |
+| **`cinematic-fast`** | 2 faces / update | 512 px | 512 px (1 face) | Soft High, balanced cascades | High-end / 60-144 FPS smooth |
 | **`balanced`** | 2 faces / update | 512 px | 512 px (1 face) | High, standard decals | Mid-range PCs |
 | **`performance`** | Off / 1 face | 256 px | 256 px | Normal shadows, optimized grass | Budget / Laptops |
 
@@ -216,8 +217,8 @@ agy-gbeam-fix --fix-materials
 # Drivetrain & Physics Repair only
 agy-gbeam-fix --fix-drivetrain
 
-# Deploy Cinematic-Fast graphics preset
-agy-gbeam-fix --optimize-graphics --preset cinematic-fast
+# Deploy Ultra-Max-FPS graphics preset (Maximum Ultra visuals + smart FPS boost)
+agy-gbeam-fix --optimize-graphics --preset ultra-max-fps
 
 # Safely purge compiled shader cache (.d3dcsx, .db)
 agy-gbeam-fix --clean-cache

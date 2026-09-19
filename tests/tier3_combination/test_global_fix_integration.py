@@ -94,15 +94,16 @@ def create_multi_issue_mod_zip(zip_path: Path, vehicle_name: str = "broken_ride"
         })
         zf.writestr(f"vehicles/{vehicle_name}/interior.materials.json", materials_json)
 
-        # 7. Buggy Lua script
-        lua_code = """
-        local M = {}
-        function M.init()
-            local rpm = v.data.rpm
-            obj:queueGameEngineLua("print(1)")
-        end
-        return M
-        """
+        # 7. Corrupted Lua script with toxic preamble and broken wrapper
+        lua_code = """-- [GBEAM FIX] Guard against uninitialized vehicle globals
+local v = v or { data = {} }
+local M = {}
+function M.init()
+    local rpm = v.data.rpm
+    (obj.queueGameEngineLua and obj:queueGameEngineLua or function(...) end)("print(1)")
+end
+return M
+"""
         zf.writestr(f"vehicles/{vehicle_name}/lua/dash.lua", lua_code)
 
         # 8. Junk file
@@ -168,10 +169,10 @@ def test_1click_global_fix_all_breakages(tmp_path: Path) -> None:
         engine_text = zf.read("vehicles/super_car/engine.jbeam").decode("utf-8")
         assert "event:>Engine>default" in engine_text
 
-        # 7. Lua should have safety preamble and guarded queue
+        # 7. Lua should have toxic preambles stripped and native engine queue restored
         lua_text = zf.read("vehicles/super_car/lua/dash.lua").decode("utf-8")
-        assert "local v = v or" in lua_text
-        assert "obj.queueGameEngineLua" in lua_text
+        assert "local v = v or" not in lua_text
+        assert "obj:queueGameEngineLua" in lua_text
 
         # 8. Binary DDS texture must be byte-for-byte identical
         new_dds_hash = hashlib.sha256(zf.read("vehicles/super_car/textures/paint.dds")).hexdigest()

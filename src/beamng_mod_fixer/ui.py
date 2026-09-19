@@ -166,7 +166,7 @@ class InteractiveCLI:
             print(f"  {Colors.YELLOW}[3] 🎨 Materials & Texture Doctor{Colors.RESET} {Colors.DIM}(Fix NO TEXTURE, materials.cs -> 1.5 JSON, VFS paths){Colors.RESET}")
             print(f"  {Colors.MAGENTA}[4] ⚙️ Drivetrain & Physics Repair{Colors.RESET} {Colors.DIM}(Fix frozen cars, differential explosion, tire PSI){Colors.RESET}")
             print(f"  {Colors.WHITE}[5] 🔊 Sound & Lua Crash Guard{Colors.RESET} {Colors.DIM}(Modernize FMOD audio, patch obsolete lua APIs){Colors.RESET}")
-            print(f"  {Colors.CYAN}[6] 🚀 Graphics & FPS Optimizer{Colors.RESET} {Colors.DIM}(Cinematic-Fast, Balanced, Maximum-FPS presets){Colors.RESET}")
+            print(f"  {Colors.CYAN}[6] 🚀 Graphics & FPS Optimizer{Colors.RESET} {Colors.DIM}(Ultra-Max-FPS, Cinematic-Fast, Balanced presets){Colors.RESET}")
             print(f"  {Colors.GREEN}[7] 🧹 Cache & Diagnostics Purge{Colors.RESET} {Colors.DIM}(DirectX/Vulkan shaders, vehicle binaries, temp files){Colors.RESET}")
             print(f"  {Colors.YELLOW}[8] 📋 Deep Mod Health Audit{Colors.RESET} {Colors.DIM}(Safe non-modifying dry-run scan with report){Colors.RESET}")
             print(f"  {Colors.CYAN}[9] 📁 Change / View BeamNG Directory & Paths{Colors.RESET} {Colors.DIM}(Multi-drive auto-detection & path validator){Colors.RESET}")
@@ -275,11 +275,11 @@ class InteractiveCLI:
         cache_status = "Skipped"
 
         # Stage 6: Graphics & FPS Optimizer
-        print(f"\n{Colors.BOLD}{Colors.CYAN}[Stage 6/7]{Colors.RESET} {Colors.WHITE}Deploying 'cinematic-fast' Graphics & FPS Optimization Preset...{Colors.RESET}")
+        print(f"\n{Colors.BOLD}{Colors.CYAN}[Stage 6/7]{Colors.RESET} {Colors.WHITE}Deploying 'ultra-max-fps' Maximum Ultra Graphics & Smart FPS Optimization...{Colors.RESET}")
         try:
-            opt_res = optimize_settings(self.paths["settings_dir"], preset="cinematic-fast", dry_run=self.dry_run)
-            graphics_status = f"Applied 'cinematic-fast' ({len(opt_res.applied_keys)} keys tuned)"
-            print(f"  {Colors.GREEN}✔ Applied 60FPS dynamic reflections, soft shadows, and clustered lighting ({len(opt_res.applied_keys)} keys tuned){Colors.RESET}")
+            opt_res = optimize_settings(self.paths["settings_dir"], preset="ultra-max-fps", dry_run=self.dry_run)
+            graphics_status = f"Applied 'ultra-max-fps' ({len(opt_res.applied_keys)} keys tuned)"
+            print(f"  {Colors.GREEN}✔ Applied Ultra graphics, 1024px cubemaps, 4x shadows, and smart FPS boost ({len(opt_res.applied_keys)} keys tuned){Colors.RESET}")
             if opt_res.backup_created:
                 print(f"    Settings backup saved: {opt_res.backup_path}")
         except Exception as e:
@@ -454,17 +454,23 @@ class InteractiveCLI:
             clear_screen()
             print(SPLASH_BANNER)
             print(f"{Colors.BOLD}{Colors.CYAN}🚀 GRAPHICS & FPS OPTIMIZER{Colors.RESET}\n")
-            print(f"  [1] Deploy 'Cinematic-Fast' (Ultra visuals + 60fps fast reflections + smooth shadows)")
-            print(f"  [2] Deploy 'Balanced' (Standard sweet spot for mid-range systems)")
-            print(f"  [3] Deploy 'Maximum-FPS' (Extreme performance boost for low-end / competitive)")
-            print(f"  [4] Restore Graphics Settings from Previous Backup")
+            print(f"  [1] Deploy 'Ultra-Max-FPS' (Max Ultra visuals: 1024px cubemaps, 4x shadows, soft filters, smart 3-face boost)")
+            print(f"  [2] Deploy 'Cinematic-Fast' (Balanced High/Ultra for mid-high setups)")
+            print(f"  [3] Deploy 'Balanced' (Standard sweet spot for mid-range systems)")
+            print(f"  [4] Deploy 'Maximum-FPS' (Extreme performance boost for low-end / competitive)")
+            print(f"  [5] Restore Graphics Settings from Previous Backup")
             print(f"  [0] Return to Main Menu")
 
-            choice = input(f"\n{Colors.BOLD}Select an option [0-4]: {Colors.RESET}").strip()
+            choice = input(f"\n{Colors.BOLD}Select an option [0-5]: {Colors.RESET}").strip()
             if choice == "0":
                 return
-            elif choice in ("1", "2", "3"):
-                preset_map = {"1": "cinematic-fast", "2": "balanced", "3": "performance"}
+            elif choice in ("1", "2", "3", "4"):
+                preset_map = {
+                    "1": "ultra-max-fps",
+                    "2": "cinematic-fast",
+                    "3": "balanced",
+                    "4": "performance"
+                }
                 preset = preset_map[choice]
                 print(f"\n[*] Deploying graphics preset '{preset}'...")
                 res = optimize_settings(self.paths["settings_dir"], preset=preset, dry_run=self.dry_run)
@@ -472,7 +478,7 @@ class InteractiveCLI:
                 if res.backup_created:
                     print(f"  Backup created: {res.backup_path}")
                 pause_return()
-            elif choice == "4":
+            elif choice == "5":
                 print("\n[*] Restoring graphics settings from backup...")
                 restored = restore_settings_backup(self.paths["settings_dir"])
                 if restored:

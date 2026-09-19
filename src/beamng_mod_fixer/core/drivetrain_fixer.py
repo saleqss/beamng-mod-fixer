@@ -17,44 +17,44 @@ logger = logging.getLogger(__name__)
 
 # Regular expressions for JBeam drivetrain & physics patching
 
-# Differential gear ratio: gearRatio: 0, negative, or quoted "0"
+# Differential gear ratio: gearRatio: 0, negative, or quoted "0" (never match valid 0.xxx)
 RE_DIFF_GEAR_RATIO = re.compile(
-    r'(?i)([\"\'\`]?gearRatio[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)([\"\'`]?)'
+    r'(?i)([\"\'\`]?gearRatio[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)(?![.\d])([\"\'`]?)'
 )
 
-# Differential torque split: diffTorqueSplit <= 0 or >= 1.0 or negative
+# Differential torque split: diffTorqueSplit <= 0 or >= 1.0 or negative (never match valid 0.xxx)
 RE_DIFF_TORQUE_SPLIT = re.compile(
-    r'(?i)([\"\'\`]?diffTorqueSplit[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?|[1-9]\d*(?:\.\d+)?)([\"\'`]?)'
+    r'(?i)([\"\'\`]?diffTorqueSplit[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?|[1-9]\d*(?:\.\d+)?)(?![.\d])([\"\'`]?)'
 )
 
 # Viscous coupling stiffness explosion (values > 10000 cause infinite velocity in BeamNG physics)
 RE_VISCOUS_STIFFNESS = re.compile(
-    r'(?i)([\"\'\`]?viscousCoupling[\"\'\`]?\s*:\s*[\"\'`]?)([1-9]\d{4,}(?:\.\d+)?)([\"\'`]?)'
+    r'(?i)([\"\'\`]?viscousCoupling[\"\'\`]?\s*:\s*[\"\'`]?)([1-9]\d{4,}(?:\.\d+)?)(?![.\d])([\"\'`]?)'
 )
 
-# Tire pressure: pressurePSI < 10.0, 0, or negative (collapses tire mesh, causes instability freeze)
+# Tire pressure: pressurePSI < 10.0, 0, or negative (never match lookup arrays like "pressurePSI":[ )
 RE_TIRE_PRESSURE = re.compile(
-    r'(?i)([\"\'\`]?pressurePSI[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|[0-9](?:\.[0-9]+)?)([\"\'`]?)'
+    r'(?i)([\"\'\`]?pressurePSI[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|[0-9](?:\.[0-9]+)?)(?![.\d\[])([\"\'`]?)'
 )
 
 # Wheel inertia: wheelInertia: 0 or negative
 RE_WHEEL_INERTIA = re.compile(
-    r'(?i)([\"\'\`]?wheelInertia[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)([\"\'`]?)'
+    r'(?i)([\"\'\`]?wheelInertia[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)(?![.\d])([\"\'`]?)'
 )
 
 # Clutch torque: clutchTorque: 0 or negative
 RE_CLUTCH_TORQUE = re.compile(
-    r'(?i)([\"\'\`]?clutchTorque[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)([\"\'`]?)'
+    r'(?i)([\"\'\`]?clutchTorque[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)(?![.\d])([\"\'`]?)'
 )
 
-# Abnormal tire friction coefficients (<= 0.05 or > 5.0)
+# Abnormal tire friction coefficients (<= 0.05 or > 5.0, never match valid 1.0 or 0.8)
 RE_TIRE_FRICTION = re.compile(
-    r'(?i)([\"\'\`]?frictionCoef[\"\'\`]?\s*:\s*[\"\'`]?)(0(?:\.0[0-4]*)?|[5-9]\d*(?:\.\d+)?)([\"\'`]?)'
+    r'(?i)([\"\'\`]?frictionCoef[\"\'\`]?\s*:\s*[\"\'`]?)(0(?:\.0[0-4]*)?|[5-9]\d*(?:\.\d+)?)(?![.\d])([\"\'`]?)'
 )
 
 # Extreme or negative brake torque
 RE_BRAKE_TORQUE = re.compile(
-    r'(?i)([\"\'\`]?(?:brakeTorque|brakingTorque)[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|[5-9]\d{4,}(?:\.\d+)?)([\"\'`]?)'
+    r'(?i)([\"\'\`]?(?:brakeTorque|brakingTorque)[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|[5-9]\d{4,}(?:\.\d+)?)(?![.\d])([\"\'`]?)'
 )
 
 
