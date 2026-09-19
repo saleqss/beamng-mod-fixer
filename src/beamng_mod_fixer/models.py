@@ -76,6 +76,12 @@ class ModArchiveReport:
     jbeams_inspected: int = 0
     jbeams_modified: int = 0
     shadows_fixed: int = 0
+    materials_converted: int = 0
+    materials_fixed: int = 0
+    drivetrains_fixed: int = 0
+    sounds_fixed: int = 0
+    lua_fixed: int = 0
+    junk_cleaned: int = 0
     diagnostics: List[DiagnosticNotice] = field(default_factory=list)
     error_message: Optional[str] = None
     elapsed_seconds: float = 0.0
@@ -93,6 +99,12 @@ class ModArchiveReport:
             "jbeams_inspected": self.jbeams_inspected,
             "jbeams_modified": self.jbeams_modified,
             "shadows_fixed": self.shadows_fixed,
+            "materials_converted": self.materials_converted,
+            "materials_fixed": self.materials_fixed,
+            "drivetrains_fixed": self.drivetrains_fixed,
+            "sounds_fixed": self.sounds_fixed,
+            "lua_fixed": self.lua_fixed,
+            "junk_cleaned": self.junk_cleaned,
             "diagnostics": [d.to_dict() for d in self.diagnostics],
             "error_message": self.error_message,
             "elapsed_seconds": self.elapsed_seconds,
@@ -155,6 +167,12 @@ class OverallSummary:
     jbeams_inspected: int = 0
     jbeams_fixed: int = 0
     shadows_fixed: int = 0
+    materials_converted: int = 0
+    materials_fixed: int = 0
+    drivetrains_fixed: int = 0
+    sounds_fixed: int = 0
+    lua_fixed: int = 0
+    junk_cleaned: int = 0
     skipped_locked: int = 0
     skipped_corrupt: int = 0
     skipped_encrypted: int = 0
@@ -179,6 +197,12 @@ class OverallSummary:
             "jbeams_inspected": self.jbeams_inspected,
             "jbeams_fixed": self.jbeams_fixed,
             "shadows_fixed": self.shadows_fixed,
+            "materials_converted": self.materials_converted,
+            "materials_fixed": self.materials_fixed,
+            "drivetrains_fixed": self.drivetrains_fixed,
+            "sounds_fixed": self.sounds_fixed,
+            "lua_fixed": self.lua_fixed,
+            "junk_cleaned": self.junk_cleaned,
             "skipped_locked": self.skipped_locked,
             "skipped_corrupt": self.skipped_corrupt,
             "skipped_encrypted": self.skipped_encrypted,

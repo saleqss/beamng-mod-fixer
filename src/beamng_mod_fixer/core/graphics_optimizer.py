@@ -38,6 +38,75 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 
 OPTIMIZATION_PRESETS: Dict[str, Dict[str, Any]] = {
+    "cinematic-fast": {
+        "settings": {
+            "GraphicDynReflection": True,
+            "GraphicDynReflectionEnabled": True,
+            "GraphicDynReflectionFacesPerupdate": 2,
+            "GraphicDynReflectionTexsize": 2,
+            "GraphicDynReflectionDistance": 350,
+            "GraphicDynReflectionDetail": 0.85,
+            "GraphicDynMirrorsEnabled": True,
+            "GraphicDynMirrorsTexsize": 2,
+            "GraphicDynMirrorsDetail": 0.85,
+            "GraphicDynMirrorsDistance": 350,
+            "GraphicShadowsQuality": "High",
+            "GraphicShadowQuality": "High",
+            "GraphicDisableShadows": "0",
+            "GraphicLightingQuality": "High",
+            "GraphicClusteredQuality": "High",
+            "GraphicMaxDecalCount": 8000,
+            "GraphicMeshQuality": "High",
+            "GraphicTextureQuality": "High",
+            "GraphicTerrainQuality": "High",
+            "GraphicGrassDensity": 0.85,
+            "GraphicAnisotropic": 16,
+            "GraphicAntialias": 4,
+            "GraphicAntialiasType": "smaa",
+            "GraphicCloudsQuality": "High",
+            "PostFXSSAOGeneralEnabled": True,
+            "PostFXScreenSpaceShadowsEnabled": True,
+            "PostFXDOFGeneralEnabled": False,
+            "PostFXMotionBlurEnabled": False,
+            "PostFXLightRaysEnabled": True,
+        },
+        "game_settings": {
+            "BeamNGVehicle": {
+                "dynamicReflection": {
+                    "enabled": True,
+                    "facesPerUpdate": 2,
+                    "textureSize": 512,
+                    "detail": 0.85,
+                    "distance": 350,
+                    "debugEnabled": False,
+                },
+                "dynamicMirrors": {
+                    "enabled": True,
+                    "textureSize": 512,
+                    "detail": 0.85,
+                    "distance": 350,
+                },
+            },
+            "Shadows": {
+                "textureScalar": 2,
+                "filterMode": 1,
+                "disable": 0,
+            },
+            "TS": {
+                "maxDecalCount": 8000,
+                "detailAdjust": 2,
+                "skipRenderDLs": 0,
+            },
+            "Decals": {
+                "enabled": True,
+            },
+            "Reflect": {
+                "maxLights": 96,
+                "deferredLighting": True,
+                "depthPrepass": True,
+            },
+        },
+    },
     "balanced": {
         "settings": {
             "GraphicDynReflection": True,

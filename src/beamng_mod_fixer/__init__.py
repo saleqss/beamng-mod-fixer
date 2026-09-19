@@ -1,14 +1,25 @@
-"""BeamNG.drive Mod Fixer, Headlight Restorer & Graphics Optimizer.
+"""GBEAM FIX: BeamNG.drive Mod Fixer, Headlight Restorer & Graphics Optimizer.
 
-A high-performance Python utility and engine for BeamNG.drive that fixes
-broken headlights caused by PBR self-shadow occlusion (lightCastShadows: false),
-diagnoses optics/spotlights defects, deploys optimal graphics settings, and cleans
-shader caches.
+A high-performance Python utility and community engine for BeamNG.drive that fixes:
+- Broken headlights and optics (PBR self-shadow occlusion, inverted angles, flares/cookies)
+- Legacy materials.cs converted to modern main.materials.json 1.5 PBR
+- Orange 'NO TEXTURE' and broken VFS texture paths
+- Differential freeze and physics explosions, tire pressures and friction
+- Obsolete audio paths modernized to BeamNG FMOD sound events
+- Deprecated vehicle Lua scripts guarded against fatal spawn crashes
+- 60FPS fast reflections, soft shadows, and shader cache cleaning
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "BeamNG Modding Tools Team"
 
+from beamng_mod_fixer.core.cache_cleaner import clean_shader_cache
+from beamng_mod_fixer.core.drivetrain_fixer import fix_drivetrain_content
+from beamng_mod_fixer.core.graphics_optimizer import (
+    OPTIMIZATION_PRESETS,
+    optimize_settings,
+    restore_settings_backup,
+)
 from beamng_mod_fixer.core.jbeam_fixer import (
     audit_spotlights,
     decode_jbeam_bytes,
@@ -18,6 +29,15 @@ from beamng_mod_fixer.core.jbeam_fixer import (
     patch_jbeam_text,
     smart_fix_jbeam_content,
 )
+from beamng_mod_fixer.core.lua_fixer import fix_lua_content
+from beamng_mod_fixer.core.materials_fixer import (
+    convert_materials_cs_to_json,
+    fix_materials_json_content,
+    parse_materials_cs,
+)
+from beamng_mod_fixer.core.path_resolver import detect_beamng_user_dir, resolve_beamng_paths
+from beamng_mod_fixer.core.sound_fixer import fix_sound_content
+from beamng_mod_fixer.core.zip_processor import is_archive_encrypted, process_mod_archive, scan_and_fix_mods
 from beamng_mod_fixer.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -51,6 +71,7 @@ from beamng_mod_fixer.models import (
     SettingsUpdateResult,
     SummaryMetrics,
 )
+from beamng_mod_fixer.ui import InteractiveCLI
 
 __all__ = [
     "__version__",
@@ -63,6 +84,22 @@ __all__ = [
     "audit_spotlights",
     "decode_jbeam_bytes",
     "encode_jbeam_str",
+    "convert_materials_cs_to_json",
+    "fix_materials_json_content",
+    "parse_materials_cs",
+    "fix_drivetrain_content",
+    "fix_sound_content",
+    "fix_lua_content",
+    "process_mod_archive",
+    "scan_and_fix_mods",
+    "clean_shader_cache",
+    "optimize_settings",
+    "restore_settings_backup",
+    "detect_beamng_user_dir",
+    "resolve_beamng_paths",
+    "is_archive_encrypted",
+    "OPTIMIZATION_PRESETS",
+    "InteractiveCLI",
     # Exceptions
     "BeamNGModFixerError",
     "ModArchiveError",

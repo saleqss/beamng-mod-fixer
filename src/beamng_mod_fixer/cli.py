@@ -1,4 +1,4 @@
-"""Command-line interface (CLI) for BeamNG Mod Fixer & Graphics Optimizer."""
+"""Command-line interface (CLI) for GBEAM FIX: BeamNG Mod Fixer & Graphics Optimizer."""
 
 import argparse
 import logging
@@ -15,29 +15,20 @@ from beamng_mod_fixer.core.graphics_optimizer import (
 from beamng_mod_fixer.core.path_resolver import detect_beamng_user_dir, resolve_beamng_paths
 from beamng_mod_fixer.core.zip_processor import scan_and_fix_mods
 from beamng_mod_fixer.models import ModStatus
+from beamng_mod_fixer.ui import InteractiveCLI, print_splash_banner
 
 logger = logging.getLogger(__name__)
 
-BANNER = r"""
-======================================================================
-  ____  _____    _    __  __ _   _  ____      ____  ____  _____     __
- | __ )| ____|  / \  |  \/  | \ | |/ ___|    |  _ \|  _ \|_ _\ \   / /
- |  _ \|  _|   / _ \ | |\/| |  \| | |  _ ____| | | | |_) || | \ \ / / 
- | |_) | |___ / ___ \| |  | | |\  | |_| |____| |_| |  _ < | |  \ V /  
- |____/|_____/_/   \_\_|  |_|_| \_|\____|    |____/|_| \_\___|  \_/   
-             Mod Headlight Fixer & Graphics Optimizer v{version}
-======================================================================
-""".format(version=__version__)
-
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the argument parser for the BeamNG Mod Fixer CLI."""
+    """Build the argument parser for the GBEAM FIX CLI."""
     parser = argparse.ArgumentParser(
-        prog="beamng-mod-fixer",
+        prog="agy-gbeam-fix",
         description=(
-            "BeamNG.drive Mod Headlight Fixer & Graphics Optimizer: "
-            "Automatically fix broken headlights (lightCastShadows) in mod ZIP archives, "
-            "optimize graphics settings for high FPS, and safely clean shader caches."
+            "GBEAM FIX — Ultimate Global Mod Fixer & Graphics Optimizer for BeamNG.drive:\n"
+            "Automatically repair broken headlights, convert materials.cs to JSON 1.5, fix orange NO TEXTURE,\n"
+            "repair frozen differentials/physics, modernize audio to FMOD, optimize graphics settings for 60+ FPS,\n"
+            "and safely clean corrupted shader caches."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -75,12 +66,32 @@ def build_parser() -> argparse.ArgumentParser:
     actions_group.add_argument(
         "--fix-mods",
         action="store_true",
-        help="Scan and fix broken headlights (lightCastShadows: true -> false) in mod archives.",
+        help="Scan and fix broken headlights (lightCastShadows) and optics in mod archives.",
+    )
+    actions_group.add_argument(
+        "--fix-materials",
+        action="store_true",
+        help="Convert materials.cs to modern JSON 1.5 and repair texture paths (fix NO TEXTURE).",
+    )
+    actions_group.add_argument(
+        "--fix-drivetrain",
+        action="store_true",
+        help="Repair broken differentials (prevent physics freeze/explosion) and tire pressures.",
+    )
+    actions_group.add_argument(
+        "--fix-sound",
+        action="store_true",
+        help="Modernize pre-FMOD audio paths to official BeamNG FMOD events.",
+    )
+    actions_group.add_argument(
+        "--fix-lua",
+        action="store_true",
+        help="Guard deprecated vehicle Lua calls (prevent fatal script crashes on spawn).",
     )
     actions_group.add_argument(
         "--optimize-graphics",
         action="store_true",
-        help="Deploy balanced high-performance graphics preset to BeamNG settings.",
+        help="Deploy high-performance graphics preset to BeamNG settings (fast reflections, soft shadows).",
     )
     actions_group.add_argument(
         "--clean-cache",
@@ -88,9 +99,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Safely purge compiled DirectX/Vulkan shader binaries (.d3dcsx, .db) in temp/.",
     )
     actions_group.add_argument(
-        "-a", "--all",
+        "-a", "--all", "--global-fix",
+        dest="all",
         action="store_true",
-        help="Execute all actions: fix mods, optimize graphics, and clean shader cache.",
+        help="1-Click Global Fix: Execute all repair actions and optimize graphics + clean cache.",
+    )
+    actions_group.add_argument(
+        "-i", "--interactive",
+        action="store_true",
+        help="Launch the interactive hierarchical terminal UI menu.",
     )
 
     # Options
@@ -98,7 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     options_group.add_argument(
         "--preset",
         choices=list(OPTIMIZATION_PRESETS.keys()),
-        default="balanced",
+        default="cinematic-fast",
         help="Graphics optimization preset (default: %(default)s).",
     )
     options_group.add_argument(
@@ -133,15 +150,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint."""
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    if hasattr(sys.stderr, "reconfigure"):
+        try:
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     parser = build_parser()
     args = parser.parse_args(argv)
 
     # Logging setup
     log_level = logging.DEBUG if args.verbose else (logging.WARNING if args.quiet else logging.INFO)
     logging.basicConfig(level=log_level, format="%(levelname)s: %(message)s")
-
-    if not args.quiet:
-        print(BANNER)
 
     # Resolve active paths
     paths = resolve_beamng_paths(
@@ -154,67 +179,53 @@ def main(argv: Optional[List[str]] = None) -> int:
     settings_dir = paths["settings_dir"]
     cache_dir = paths["cache_dir"]
 
-    # Determine actions to run
-    run_mods = args.fix_mods or args.all
-    run_graphics = args.optimize_graphics or args.all
-    run_cache = args.clean_cache or args.all
-    selective_fix = (args.mode == "smart")
+    # Determine actions
+    has_specific_action = (
+        args.fix_mods
+        or args.fix_materials
+        or args.fix_drivetrain
+        or args.fix_sound
+        or args.fix_lua
+        or args.optimize_graphics
+        or args.clean_cache
+        or args.all
+    )
 
-    # If no specific action was requested and running interactively, ask or default to --all
-    if not (run_mods or run_graphics or run_cache):
-        if sys.stdin.isatty():
-            detected = detect_beamng_user_dir()
-            print(f"Detected BeamNG User Directory: {detected or 'Not found (using defaults)'}")
-            print("\nSelect an action to perform:")
-            print("  1) Smart Fix: Fix broken headlights selectively (recommended — preserves highbeams & modernizes cookies)")
-            print("  2) Legacy Fix: Convert all lightCastShadows to false everywhere")
-            print("  3) Optimize graphics settings (high FPS + crisp visuals)")
-            print("  4) Clean shader and texture cache")
-            print("  5) Perform ALL actions (Smart Fix + Optimize + Clean cache)")
-            print("  6) Exit")
-            try:
-                choice = input("\nEnter choice [1-6] (default: 5): ").strip()
-                if choice == "1":
-                    run_mods = True
-                    selective_fix = True
-                elif choice == "2":
-                    run_mods = True
-                    selective_fix = False
-                elif choice == "3":
-                    run_graphics = True
-                elif choice == "4":
-                    run_cache = True
-                elif choice in ("5", ""):
-                    run_mods = True
-                    selective_fix = True
-                    run_graphics = True
-                    run_cache = True
-                else:
-                    print("Exiting.")
-                    return 0
-            except (KeyboardInterrupt, EOFError):
-                print("\nAborted by user.")
-                return 0
-        else:
-            # Non-interactive without action flags: default to all with smart mode
-            run_mods = True
-            run_graphics = True
-            run_cache = True
-            selective_fix = True
+    # Launch interactive menu if requested or if interactive terminal with no specific actions
+    if args.interactive or (not has_specific_action and sys.stdin.isatty()):
+        ui = InteractiveCLI(paths=paths, dry_run=args.dry_run)
+        return ui.run_main_menu()
+
+    if not args.quiet:
+        print_splash_banner()
+
+    run_mods = args.fix_mods or args.all or not has_specific_action
+    run_materials = args.fix_materials or args.all or not has_specific_action
+    run_drivetrain = args.fix_drivetrain or args.all or not has_specific_action
+    run_sound = args.fix_sound or args.all or not has_specific_action
+    run_lua = args.fix_lua or args.all or not has_specific_action
+    run_graphics = args.optimize_graphics or args.all or not has_specific_action
+    run_cache = args.clean_cache or args.all or not has_specific_action
+    selective_fix = (args.mode == "smart")
 
     dry_run_tag = " [DRY RUN]" if args.dry_run else ""
     success = True
 
-    # Action 1: Fix mods
-    if run_mods:
+    # Action 1: Mod Scanning & Multi-Domain Repair
+    if run_mods or run_materials or run_drivetrain or run_sound or run_lua:
         mode_tag = " (smart selective)" if selective_fix else " (legacy)"
         if not args.quiet:
-            print(f"\n[*] Scanning and fixing mods in: {mods_dir}{mode_tag}{dry_run_tag}")
+            print(f"\n[*] Scanning & fixing mods in: {mods_dir}{mode_tag}{dry_run_tag}")
         try:
             summary = scan_and_fix_mods(
                 mods_dir,
                 dry_run=args.dry_run,
                 selective=selective_fix,
+                fix_materials=run_materials,
+                fix_drivetrain=run_drivetrain,
+                fix_sound=run_sound,
+                fix_lua=run_lua,
+                clean_junk=True,
                 progress_callback=(
                     None
                     if args.quiet
@@ -228,21 +239,27 @@ def main(argv: Optional[List[str]] = None) -> int:
                 ),
             )
             if not args.quiet:
-                print("\n" + "=" * 50)
-                print(f"MOD SCAN SUMMARY{dry_run_tag}")
-                print("=" * 50)
-                print(f"  Total mod archives scanned : {summary.total_scanned}")
+                print("\n" + "=" * 60)
+                print(f"MOD SCAN & REPAIR SUMMARY{dry_run_tag}")
+                print("=" * 60)
+                print(f"  Total mod archives scanned  : {summary.total_scanned}")
                 print(f"  Modified (fixed) archives : {summary.modified_archives}")
                 print(f"  Already clean archives    : {summary.clean_archives}")
                 print(f"  JBeam files inspected     : {summary.jbeams_inspected}")
                 print(f"  JBeam files modified      : {summary.jbeams_fixed}")
                 print(f"  Headlight shadows fixed   : {summary.shadows_fixed}")
+                print(f"  materials.cs converted    : {summary.materials_converted}")
+                print(f"  materials.json repaired   : {summary.materials_fixed}")
+                print(f"  Drivetrain & diff repaired: {summary.drivetrains_fixed}")
+                print(f"  FMOD audio modernized     : {summary.sounds_fixed}")
+                print(f"  Vehicle Lua guarded       : {summary.lua_fixed}")
+                print(f"  Archive junk removed      : {summary.junk_cleaned}")
                 print(f"  Skipped (locked/in-use)   : {summary.skipped_locked}")
                 print(f"  Skipped (corrupt)         : {summary.skipped_corrupt}")
                 print(f"  Skipped (encrypted)       : {summary.skipped_encrypted}")
                 print(f"  Errors encountered        : {summary.errors_encountered}")
                 print(f"  Elapsed time              : {summary.elapsed_seconds:.2f}s")
-                print("=" * 50)
+                print("=" * 60)
             else:
                 print(f"Mods fixed: {summary.modified_archives}/{summary.total_scanned}, JBeams fixed: {summary.jbeams_fixed}")
         except Exception as e:

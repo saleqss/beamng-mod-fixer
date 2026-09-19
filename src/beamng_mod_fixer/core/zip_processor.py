@@ -1,11 +1,18 @@
-"""High-performance streaming ZIP processor and mod fixer for BeamNG.drive.
+"""High-performance streaming ZIP processor and comprehensive mod fixer for BeamNG.drive.
 
 Provides:
 - Detection of encrypted and password-protected archives
 - Detection of corrupted, truncated, or bad-CRC ZIP archives
 - Handling of locked or in-use files with safe fallbacks
 - Atomic in-place archive rewriting with directory structure preservation
-- Non-JBeam binary asset passthrough with byte-for-byte SHA-256 integrity
+- Non-text binary asset passthrough with byte-for-byte SHA-256 integrity
+- Comprehensive multi-domain mod fixing:
+  * Headlights & Optics (lightCastShadows, angles, flares, cookies, electrics)
+  * Materials & Textures (materials.cs -> main.materials.json 1.5, VFS paths, emissives)
+  * Drivetrain & Physics (differentials, gear ratios, viscous stiffness, tire pressures, clutch)
+  * Sound & Audio (pre-FMOD paths -> modern BeamNG FMOD events)
+  * Lua Crash Guard (v.data guard, deprecated API wrappers)
+  * Cache & Junk Purge (Thumbs.db, .DS_Store, .bak, .tmp removal)
 - Batch directory scanning with aggregated metrics reporting
 """
 
@@ -18,11 +25,18 @@ from typing import Any, Callable, Dict, List, Optional, Set
 import zipfile
 
 from beamng_mod_fixer.core import file_utils
+from beamng_mod_fixer.core.drivetrain_fixer import fix_drivetrain_content
 from beamng_mod_fixer.core.jbeam_fixer import (
     decode_jbeam_bytes,
     encode_jbeam_str,
     fix_jbeam_content,
 )
+from beamng_mod_fixer.core.lua_fixer import fix_lua_content
+from beamng_mod_fixer.core.materials_fixer import (
+    convert_materials_cs_to_json,
+    fix_materials_json_content,
+)
+from beamng_mod_fixer.core.sound_fixer import fix_sound_content
 from beamng_mod_fixer.exceptions import (
     ArchiveCorruptedError,
     ArchiveEncryptedError,
@@ -107,14 +121,24 @@ def process_mod_archive(
     dry_run: bool = False,
     enable_diagnostics: bool = True,
     selective: bool = False,
+    fix_materials: bool = True,
+    fix_drivetrain: bool = True,
+    fix_sound: bool = True,
+    fix_lua: bool = True,
+    clean_junk: bool = True,
 ) -> ModArchiveReport:
-    """Process an individual BeamNG mod archive, fixing broken headlights in .jbeam files.
+    """Process an individual BeamNG mod archive with comprehensive multi-domain repair.
 
     Performs:
-    1. Validation of existence, non-zero size, and header integrity.
+    1. Validation of existence, non-zero size, and header CRC integrity.
     2. Detection of password protection / encryption.
-    3. Detection of file locks (in use by BeamNG.drive or other process).
-    4. Safe extraction and JBeam patching of lightCastShadows and optics assets.
+    3. Detection of file locks (in use by BeamNG.drive or another process).
+    4. Multi-domain repair across:
+       - .jbeam files: Headlights/Optics + Drivetrain/Physics + Audio paths.
+       - materials.cs: Conversion to modern main.materials.json v1.5 PBR.
+       - *.materials.json: Version upgrade, path normalization, VFS texture reconciliation.
+       - *.lua: Deprecated API guarding against fatal vehicle Lua crashes.
+       - Junk files: Removal of Thumbs.db, .DS_Store, .bak, .tmp clutter.
     5. Atomic in-place replacement via temporary file swap if modified and not dry_run.
 
     Args:
@@ -122,6 +146,11 @@ def process_mod_archive(
         dry_run: If True, preview fixes without modifying files on disk.
         enable_diagnostics: If True, gather detailed diagnostic notices.
         selective: If True, uses smart selective fixing to protect highbeams and modernize cookies.
+        fix_materials: If True, converts materials.cs and repairs materials.json.
+        fix_drivetrain: If True, repairs broken differentials, tire pressures, and clutch parameters.
+        fix_sound: If True, modernizes legacy sound paths to BeamNG FMOD events.
+        fix_lua: If True, guards deprecated vehicle Lua calls.
+        clean_junk: If True, cleans OS junk files from archive.
 
     Returns:
         ModArchiveReport with status, metrics, and diagnostics.
@@ -176,7 +205,9 @@ def process_mod_archive(
         return report
 
     # 4. Open and inspect ZIP contents
-    modified_jbeams: Dict[str, bytes] = {}
+    modified_files: Dict[str, bytes] = {}
+    added_files: Dict[str, bytes] = {}
+    deleted_entries: Set[str] = set()
 
     try:
         with zipfile.ZipFile(archive_path, "r") as zf:
@@ -193,26 +224,75 @@ def process_mod_archive(
 
             entries = zf.infolist()
             available_filenames = {e.filename for e in entries}
+
             for entry in entries:
-                if entry.filename.lower().endswith(".jbeam") and not entry.is_dir():
+                entry_name_lower = entry.filename.lower()
+
+                # Clean OS / Editor junk files if requested
+                if clean_junk and not entry.is_dir():
+                    if (
+                        entry_name_lower.endswith(("thumbs.db", ".ds_store", "desktop.ini"))
+                        or entry_name_lower.endswith((".bak", ".tmp", "~"))
+                    ):
+                        deleted_entries.add(entry.filename)
+                        report.junk_cleaned += 1
+                        report.diagnostics.append(
+                            DiagnosticNotice(
+                                severity="info",
+                                message=f"Purged junk file '{entry.filename}' from archive",
+                                file_path=entry.filename,
+                                rule="junk_file_purged",
+                            )
+                        )
+                        continue
+
+                # 4a. JBeam files
+                if entry_name_lower.endswith(".jbeam") and not entry.is_dir():
                     report.jbeams_inspected += 1
                     try:
                         raw_data = zf.read(entry.filename)
                         text, encoding = decode_jbeam_bytes(raw_data)
+                        file_modified = False
+
+                        # Pass 1: Optics & Headlights
                         fixed_text, fix_count, diags = fix_jbeam_content(
                             text,
                             filename=entry.filename,
                             available_files=available_filenames,
                             selective=selective,
                         )
-
-                        is_modified = fix_count > 0 or fixed_text != text
-                        if is_modified:
-                            report.jbeams_modified += 1
+                        if fix_count > 0 or fixed_text != text:
+                            file_modified = True
                             report.shadows_fixed += fix_count
                             report.diagnostics.extend(diags)
+
+                        # Pass 2: Drivetrain & Physics
+                        if fix_drivetrain:
+                            fixed_text, dt_count, dt_diags = fix_drivetrain_content(
+                                fixed_text,
+                                filename=entry.filename
+                            )
+                            if dt_count > 0:
+                                file_modified = True
+                                report.drivetrains_fixed += dt_count
+                                report.diagnostics.extend(dt_diags)
+
+                        # Pass 3: Sound & Audio Modernization
+                        if fix_sound:
+                            fixed_text, snd_count, snd_diags = fix_sound_content(
+                                fixed_text,
+                                filename=entry.filename
+                            )
+                            if snd_count > 0:
+                                file_modified = True
+                                report.sounds_fixed += snd_count
+                                report.diagnostics.extend(snd_diags)
+
+                        if file_modified:
+                            report.jbeams_modified += 1
                             new_bytes = encode_jbeam_str(fixed_text, encoding)
-                            modified_jbeams[entry.filename] = new_bytes
+                            modified_files[entry.filename] = new_bytes
+
                     except Exception as parse_err:
                         report.diagnostics.append(
                             DiagnosticNotice(
@@ -221,6 +301,76 @@ def process_mod_archive(
                                 file_path=entry.filename,
                             )
                         )
+
+                # 4b. Legacy materials.cs -> convert to modern main.materials.json (v1.5)
+                elif fix_materials and entry_name_lower.endswith("materials.cs") and not entry.is_dir():
+                    try:
+                        raw_data = zf.read(entry.filename)
+                        cs_text, _ = decode_jbeam_bytes(raw_data)
+                        json_str, conv_count, cs_diags = convert_materials_cs_to_json(
+                            cs_text,
+                            filename=entry.filename
+                        )
+                        if conv_count > 0:
+                            report.materials_converted += conv_count
+                            report.diagnostics.extend(cs_diags)
+                            dirname = entry.filename.rsplit("/", 1)[0] if "/" in entry.filename else ""
+                            target_json = f"{dirname}/main.materials.json" if dirname else "main.materials.json"
+                            added_files[target_json] = json_str.encode("utf-8")
+                    except Exception as cs_err:
+                        report.diagnostics.append(
+                            DiagnosticNotice(
+                                severity="warning",
+                                message=f"Failed converting materials.cs in '{entry.filename}': {cs_err}",
+                                file_path=entry.filename,
+                            )
+                        )
+
+                # 4c. Modern materials JSON files (*.materials.json)
+                elif fix_materials and entry_name_lower.endswith(".materials.json") and not entry.is_dir():
+                    try:
+                        raw_data = zf.read(entry.filename)
+                        json_text, encoding = decode_jbeam_bytes(raw_data)
+                        repaired_json, mat_count, mat_diags = fix_materials_json_content(
+                            json_text,
+                            filename=entry.filename,
+                            available_files=available_filenames
+                        )
+                        if mat_count > 0 or repaired_json != json_text:
+                            report.materials_fixed += mat_count
+                            report.diagnostics.extend(mat_diags)
+                            modified_files[entry.filename] = encode_jbeam_str(repaired_json, encoding)
+                    except Exception as mat_err:
+                        report.diagnostics.append(
+                            DiagnosticNotice(
+                                severity="warning",
+                                message=f"Failed processing materials.json in '{entry.filename}': {mat_err}",
+                                file_path=entry.filename,
+                            )
+                        )
+
+                # 4d. Vehicle Lua scripts (*.lua)
+                elif fix_lua and entry_name_lower.endswith(".lua") and not entry.is_dir():
+                    try:
+                        raw_data = zf.read(entry.filename)
+                        lua_text, encoding = decode_jbeam_bytes(raw_data)
+                        repaired_lua, lua_count, lua_diags = fix_lua_content(
+                            lua_text,
+                            filename=entry.filename
+                        )
+                        if lua_count > 0 or repaired_lua != lua_text:
+                            report.lua_fixed += lua_count
+                            report.diagnostics.extend(lua_diags)
+                            modified_files[entry.filename] = encode_jbeam_str(repaired_lua, encoding)
+                    except Exception as lua_err:
+                        report.diagnostics.append(
+                            DiagnosticNotice(
+                                severity="warning",
+                                message=f"Failed processing Lua script '{entry.filename}': {lua_err}",
+                                file_path=entry.filename,
+                            )
+                        )
+
     except zipfile.BadZipFile as e:
         report.status = ModStatus.CORRUPT.value
         report.error_message = f"Corrupted ZIP archive: {e}"
@@ -244,8 +394,19 @@ def process_mod_archive(
         report.elapsed_seconds = time.perf_counter() - start_time
         return report
 
-    # 5. No modifications needed
-    if report.jbeams_modified == 0:
+    # 5. Check if any modifications were made across any domain
+    total_modifications = (
+        report.jbeams_modified
+        + report.materials_converted
+        + report.materials_fixed
+        + report.drivetrains_fixed
+        + report.sounds_fixed
+        + report.lua_fixed
+        + report.junk_cleaned
+        + len(added_files)
+    )
+
+    if total_modifications == 0:
         report.status = ModStatus.CLEAN.value
         report.elapsed_seconds = time.perf_counter() - start_time
         return report
@@ -264,10 +425,16 @@ def process_mod_archive(
             with zipfile.ZipFile(
                 temp_target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1
             ) as dst_zf:
+                written_names: Set[str] = set()
+
                 for entry in src_zf.infolist():
-                    if entry.filename in modified_jbeams:
-                        # Write patched JBeam data preserving metadata and UTF-8 flag
-                        new_data = modified_jbeams[entry.filename]
+                    if entry.filename in deleted_entries:
+                        # Skip deleted junk entries
+                        continue
+
+                    if entry.filename in modified_files:
+                        # Write patched text data preserving metadata and UTF-8 flags
+                        new_data = modified_files[entry.filename]
                         new_info = zipfile.ZipInfo(
                             entry.filename, date_time=entry.date_time
                         )
@@ -277,10 +444,18 @@ def process_mod_archive(
                         new_info.comment = entry.comment
                         new_info.external_attr = entry.external_attr
                         dst_zf.writestr(new_info, new_data)
+                        written_names.add(entry.filename)
                     else:
                         # Stream non-modified entries (DDS, DAE, WAV, etc.) byte-for-byte
                         entry_bytes = src_zf.read(entry.filename)
                         dst_zf.writestr(entry, entry_bytes)
+                        written_names.add(entry.filename)
+
+                # Write newly generated files (e.g. main.materials.json from materials.cs)
+                for add_name, add_data in added_files.items():
+                    if add_name not in written_names:
+                        dst_zf.writestr(add_name, add_data)
+                        written_names.add(add_name)
 
         # Atomically swap temp_target into original location
         file_utils.atomic_replace(temp_target, archive_path)
@@ -333,8 +508,13 @@ def scan_and_fix_mods(
     progress_callback: Optional[Callable[[Path, ModArchiveReport, int, int], None]] = None,
     max_workers: Optional[int] = None,
     selective: bool = False,
+    fix_materials: bool = True,
+    fix_drivetrain: bool = True,
+    fix_sound: bool = True,
+    fix_lua: bool = True,
+    clean_junk: bool = True,
 ) -> OverallSummary:
-    """Scan a directory for BeamNG mod ZIP archives and fix broken headlights.
+    """Scan a directory for BeamNG mod ZIP archives and perform comprehensive multi-domain repair.
 
     Args:
         mods_dir: Path to the BeamNG mods directory.
@@ -343,6 +523,11 @@ def scan_and_fix_mods(
                            Signature: callback(path, report, index, total_count)
         max_workers: Maximum number of worker threads for parallel archive processing.
         selective: If True, uses smart selective fixing to protect highbeams and modernize cookies.
+        fix_materials: If True, converts materials.cs and repairs materials.json.
+        fix_drivetrain: If True, repairs differentials, tire pressures, and clutch parameters.
+        fix_sound: If True, modernizes legacy audio paths to BeamNG FMOD events.
+        fix_lua: If True, guards deprecated vehicle Lua scripts.
+        clean_junk: If True, cleans OS junk files.
 
     Returns:
         OverallSummary with aggregated counts across all scanned archives.
@@ -366,13 +551,31 @@ def scan_and_fix_mods(
     if max_workers is None:
         max_workers = min(6, os.cpu_count() or 4)
 
+    def _process_one(zp: Path, is_dry: bool) -> ModArchiveReport:
+        return process_mod_archive(
+            zp,
+            dry_run=is_dry,
+            selective=selective,
+            fix_materials=fix_materials,
+            fix_drivetrain=fix_drivetrain,
+            fix_sound=fix_sound,
+            fix_lua=fix_lua,
+            clean_junk=clean_junk,
+        )
+
     if dry_run or total_files <= 1 or max_workers <= 1:
         for idx, zip_path in enumerate(zip_files, start=1):
-            report = process_mod_archive(zip_path, dry_run=dry_run, selective=selective)
+            report = _process_one(zip_path, is_dry=dry_run)
             summary.total_scanned += 1
             summary.jbeams_inspected += report.jbeams_inspected
             summary.jbeams_fixed += report.jbeams_modified
             summary.shadows_fixed += report.shadows_fixed
+            summary.materials_converted += report.materials_converted
+            summary.materials_fixed += report.materials_fixed
+            summary.drivetrains_fixed += report.drivetrains_fixed
+            summary.sounds_fixed += report.sounds_fixed
+            summary.lua_fixed += report.lua_fixed
+            summary.junk_cleaned += report.junk_cleaned
             summary.archive_reports.append(report)
 
             if report.status == ModStatus.FIXED.value:
@@ -396,7 +599,7 @@ def scan_and_fix_mods(
         completed_count = 0
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_zip = {
-                executor.submit(process_mod_archive, zp, dry_run=False, selective=selective): zp
+                executor.submit(_process_one, zp, False): zp
                 for zp in zip_files
             }
             for future in as_completed(future_to_zip):
@@ -413,6 +616,12 @@ def scan_and_fix_mods(
                 summary.jbeams_inspected += report.jbeams_inspected
                 summary.jbeams_fixed += report.jbeams_modified
                 summary.shadows_fixed += report.shadows_fixed
+                summary.materials_converted += report.materials_converted
+                summary.materials_fixed += report.materials_fixed
+                summary.drivetrains_fixed += report.drivetrains_fixed
+                summary.sounds_fixed += report.sounds_fixed
+                summary.lua_fixed += report.lua_fixed
+                summary.junk_cleaned += report.junk_cleaned
                 summary.archive_reports.append(report)
 
                 if report.status == ModStatus.FIXED.value:
