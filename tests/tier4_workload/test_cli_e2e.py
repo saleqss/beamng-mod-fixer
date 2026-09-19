@@ -206,6 +206,21 @@ def test_cli_lang_flag() -> None:
     res = run_cli("--help")
     assert "--watch" in res.stdout
     assert "--lang" in res.stdout
+    assert "--deploy-reshade" in res.stdout
+
+
+def test_cli_deploy_reshade_flag(tmp_path: Path) -> None:
+    """Test --deploy-reshade writes ReShade presets into settings dir."""
+    tree = create_synthetic_beamng_user_dir(tmp_path / "user")
+    settings_dir = tree["settings_dir"]
+
+    res = run_cli("--settings-dir", str(settings_dir), "--deploy-reshade")
+    assert res.returncode == 0
+    assert "reshade" in res.stdout.lower()
+
+    medium_ini = settings_dir / "BeamNG_Medium_Optimal.ini"
+    assert medium_ini.exists()
+    assert "CAS.fx" in medium_ini.read_text(encoding="utf-8")
 
 
 

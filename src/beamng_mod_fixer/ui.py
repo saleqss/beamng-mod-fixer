@@ -25,6 +25,10 @@ from beamng_mod_fixer.core.graphics_optimizer import (
     restore_settings_backup,
 )
 from beamng_mod_fixer.core.mod_watcher import ModWatcher
+from beamng_mod_fixer.core.reshade_manager import (
+    deploy_all_reshade_presets,
+    deploy_reshade_preset,
+)
 from beamng_mod_fixer.core.path_resolver import (
     clear_cached_paths,
     detect_beamng_user_dir,
@@ -513,7 +517,7 @@ class InteractiveCLI:
     # Submenu: Graphics & FPS Optimizer
     # ==========================================================================
     def menu_graphics_optimizer(self) -> None:
-        """Submenu for graphics settings."""
+        """Submenu for graphics settings and ReShade presets."""
         while True:
             clear_screen()
             print(SPLASH_BANNER)
@@ -522,6 +526,7 @@ class InteractiveCLI:
             print(f"  {t('gfx_preset_2')}")
             print(f"  {t('gfx_preset_3')}")
             print(f"  {t('gfx_preset_4')}")
+            print(f"  {t('gfx_reshade_deploy')}")
             print(f"  {t('gfx_restore')}")
             print("  0. Return to Main Menu")
 
@@ -539,14 +544,38 @@ class InteractiveCLI:
                     "3": "low-weak",
                     "4": "potato-ultra-weak",
                 }
+                reshade_map = {
+                    "ultra-max-fps": "ultra-photoreal",
+                    "medium-60fps": "medium-optimal",
+                    "low-weak": "low-fast",
+                    "potato-ultra-weak": "potato-boost",
+                }
                 preset = preset_map[choice]
                 print(f"\n[*] Deploying graphics preset '{preset}'...")
                 res = optimize_settings(self.paths["settings_dir"], preset=preset, dry_run=self.dry_run)
                 print(f"\n{Colors.GREEN}✔ Successfully applied preset '{preset}'! ({len(res.applied_keys)} settings tuned){Colors.RESET}")
                 if res.backup_created:
                     print(f"  Backup created: {res.backup_path}")
+
+                # Deploy matching ReShade preset
+                reshade_key = reshade_map.get(preset)
+                if reshade_key:
+                    ok, msg, p = deploy_reshade_preset(self.paths["settings_dir"], preset_name=reshade_key, dry_run=self.dry_run)
+                    if "user_dir" in self.paths and self.paths["user_dir"] != self.paths["settings_dir"]:
+                        deploy_reshade_preset(self.paths["user_dir"], preset_name=reshade_key, dry_run=self.dry_run)
+                    if ok and p:
+                        print(f"  {Colors.CYAN}✔ Deployed matching ReShade preset: {p.name}{Colors.RESET}")
                 pause_return()
             elif choice == "5":
+                print("\n[*] Deploying all ReShade presets into settings and user directory...")
+                deployed = deploy_all_reshade_presets(self.paths["settings_dir"], dry_run=self.dry_run)
+                if "user_dir" in self.paths and self.paths["user_dir"] != self.paths["settings_dir"]:
+                    deploy_all_reshade_presets(self.paths["user_dir"], dry_run=self.dry_run)
+                print(f"\n{Colors.GREEN}✔ Successfully deployed {len(deployed)} ReShade presets!{Colors.RESET}")
+                for p in deployed:
+                    print(f"  - {p.name}")
+                pause_return()
+            elif choice == "6":
                 print("\n[*] Restoring graphics settings from backup...")
                 restored = restore_settings_backup(self.paths["settings_dir"])
                 if restored:

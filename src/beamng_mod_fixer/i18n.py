@@ -120,12 +120,13 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "watcher_back": "0. ↩️ Return to Main Menu",
 
         # Graphics Presets
-        "gfx_title": "GRAPHICS & FPS OPTIMIZER",
-        "gfx_preset_1": "1. Deploy 'Ultra-Max-FPS' (Max Ultra visuals, 1024px cubemaps, 4x shadows, soft filters, smart 3-face boost)",
-        "gfx_preset_2": "2. Deploy 'Medium-60FPS' (Balanced 60 FPS sweet spot for mid-range systems, no microstutters)",
-        "gfx_preset_3": "3. Deploy 'Low-Weak' (Optimized for entry-level GPUs, reduced particles and shadows)",
-        "gfx_preset_4": "4. Deploy 'Potato-Ultra-Weak' (Extreme performance for iGPUs / weak laptops)",
-        "gfx_restore": "5. Restore Graphics Settings from Previous Backup",
+        "gfx_title": "GRAPHICS & RESHADE OPTIMIZER",
+        "gfx_preset_1": "1. Deploy 'Ultra-Max-FPS' (Max Ultra visuals, 1024px cubemaps, 4x shadows + ReShade Ultra Photoreal)",
+        "gfx_preset_2": "2. Deploy 'Medium-60FPS' (Most beautiful yet optimal 60 FPS sweet spot + ReShade Medium Optimal)",
+        "gfx_preset_3": "3. Deploy 'Low-Weak' (Entry-level GPUs: reduced particles + ReShade Low Fast)",
+        "gfx_preset_4": "4. Deploy 'Potato-Ultra-Weak' (Extreme performance for iGPUs / weak laptops + ReShade Potato Boost)",
+        "gfx_reshade_deploy": "5. 🎨 Deploy All ReShade Presets (.ini files for ReShade)",
+        "gfx_restore": "6. ↩️ Restore Graphics Settings from Previous Backup",
 
         # Messages
         "thanks": "Thank you for using GBEAM FIX. Happy driving!",
@@ -226,12 +227,13 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "watcher_back": "0. ↩️ Вернуться в главное меню",
 
         # Graphics Presets
-        "gfx_title": "ОПТИМИЗАТОР ГРАФИКИ И FPS",
-        "gfx_preset_1": "1. Применить 'Ultra-Max-FPS' (Максимальный ультра-графон: 1024px кубмапы, 4x тени, мягкие фильтры, 3 грани обновления)",
-        "gfx_preset_2": "2. Применить 'Medium-60FPS' (Идеальный баланс качества для стабильных 60 FPS без микрофризов)",
-        "gfx_preset_3": "3. Применить 'Low-Weak' (Оптимизация для бюджетных видеокарт: сниженные частицы и тени)",
-        "gfx_preset_4": "4. Применить 'Potato-Ultra-Weak' (Экстремальный буст FPS для встроек / слабых ноутбуков)",
-        "gfx_restore": "5. Восстановить настройки графики из резервной копии",
+        "gfx_title": "ОПТИМИЗАТОР ГРАФИКИ И РЕШЕЙДА",
+        "gfx_preset_1": "1. Применить 'Ultra-Max-FPS' (Максимальный ультра-графон: 1024px кубмапы, 4x тени + Решейд Ultra Photoreal)",
+        "gfx_preset_2": "2. Применить 'Medium-60FPS' (Самая красивая и оптимальная: 60 FPS без фризов + Решейд Medium Optimal)",
+        "gfx_preset_3": "3. Применить 'Low-Weak' (Для слабых ПК: оптимизация частиц и теней + Решейд Low Fast)",
+        "gfx_preset_4": "4. Применить 'Potato-Ultra-Weak' (Для ультра-слабых / встроек / картошка + Решейд Potato Boost)",
+        "gfx_reshade_deploy": "5. 🎨 Установить пресеты Решейда (.ini файлы для ReShade)",
+        "gfx_restore": "6. ↩️ Восстановить настройки графики из резервной копии",
 
         # Messages
         "thanks": "Спасибо за использование GBEAM FIX. Приятной игры!",

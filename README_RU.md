@@ -3,10 +3,10 @@
 [![CI](https://github.com/saleqss/beamng-mod-fixer/actions/workflows/ci.yml/badge.svg)](https://github.com/saleqss/beamng-mod-fixer/actions)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-273%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
+[![Tests](https://img.shields.io/badge/tests-280%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
 [![Совместимость BeamNG](https://img.shields.io/badge/BeamNG.drive-0.30%20--%200.34%2B-orange)](https://beamng.com)
 
-> **Универсальный стандарт сообщества для 100% устранения всех багов модов после обновлений BeamNG.drive (0.30 - 0.34+).** Автоматически исправляет **черные фары**, **баг белого света сзади при включении фар**, **ядовито-красные пятна стоп-сигналов**, **слабый дальний свет**, оранжевые текстуры **"NO TEXTURE"** (включая распаковку вложенных папок модов), устаревшие **`materials.cs`**, зависающие машины и **взрывающиеся дифференциалы**, разорванные колеса и нулевое давление в шинах (**`pressurePSI`**), немые звуки моторов до-FMOD и краши **Lua-скриптов**. Содержит **фоновый автоустановщик модов из Загрузок**, 4 пресета графики и чистый двуязычный интерфейс.
+> **Универсальный стандарт сообщества для 100% устранения всех багов модов после обновлений BeamNG.drive (0.30 - 0.34+).** Автоматически исправляет **черные фары**, **баг белого света сзади при включении фар**, **ядовито-красные пятна стоп-сигналов**, **слабый дальний свет**, оранжевые текстуры **"NO TEXTURE"** (включая распаковку вложенных папок модов), устаревшие **`materials.cs`**, зависающие машины и **взрывающиеся дифференциалы**, разорванные колеса и нулевое давление в шинах (**`pressurePSI`**), немые звуки моторов до-FMOD и краши **Lua-скриптов**. Содержит **фоновый автоустановщик модов из Загрузок**, 4 пресета графики с **автоматическим деплоем готовых пресетов ReShade** (Medium 60FPS Оптимальный, Low Fast, Potato Boost, Ultra Photoreal) и чистый двуязычный интерфейс.
 
 *Read in English: [README.md](README.md)*
 
@@ -198,6 +198,10 @@ agy-gbeam-fix --optimize-graphics --preset ultra-max-fps
 agy-gbeam-fix --optimize-graphics --preset medium-60fps
 agy-gbeam-fix --optimize-graphics --preset potato-ultra-weak
 
+# Деплой готовых пресетов ReShade (Medium Optimal, Low Fast, Potato Boost, Ultra Photoreal)
+agy-gbeam-fix --deploy-reshade medium-optimal
+agy-gbeam-fix --deploy-reshade ultra-photoreal
+
 # Показать обнаруженные пути BeamNG и статус
 agy-gbeam-fix --show-paths
 
@@ -210,9 +214,9 @@ agy-gbeam-fix --all --dry-run
 
 ---
 
-## 🧪 273 автоматических теста качества
+## 🧪 280 автоматических тестов качества
 
-Надежность и отказоустойчивость подтверждены **273 автоматическими тестами pytest**:
+Надежность и отказоустойчивость подтверждены **280 автоматическими тестами pytest**:
 
 ```bash
 python -m pytest -v
@@ -221,6 +225,7 @@ python -m pytest -v
 - Проверка калибровки задних фонарей, предотвращения утечки белого света и ядовито-красных пятен.
 - Проверка распаковки вложенных папок архивов и нормализации разделителей путей VFS.
 - Проверка фонового сервиса автоустановщика `ModWatcher`.
+- Проверка деплоя пресетов ReShade, интеграции AMD FidelityFX CAS и цветокоррекции.
 - Стресс-тестирование на поврежденных, запароленных, заблокированных архивах и гигантских 6MB+ JBeam файлах.
 
 ---

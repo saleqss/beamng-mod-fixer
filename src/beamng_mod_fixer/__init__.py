@@ -36,6 +36,12 @@ from beamng_mod_fixer.core.materials_fixer import (
     parse_materials_cs,
 )
 from beamng_mod_fixer.core.mod_watcher import ModWatcher
+from beamng_mod_fixer.core.reshade_manager import (
+    RESHADE_PRESETS,
+    deploy_all_reshade_presets,
+    deploy_reshade_preset,
+    detect_reshade_installation,
+)
 from beamng_mod_fixer.core.path_resolver import (
     clear_cached_paths,
     detect_beamng_user_dir,

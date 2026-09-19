@@ -19,6 +19,10 @@ from beamng_mod_fixer.core.path_resolver import (
     save_cached_paths,
 )
 from beamng_mod_fixer.core.mod_watcher import ModWatcher
+from beamng_mod_fixer.core.reshade_manager import (
+    deploy_all_reshade_presets,
+    deploy_reshade_preset,
+)
 from beamng_mod_fixer.core.zip_processor import scan_and_fix_mods
 from beamng_mod_fixer.i18n import set_language
 from beamng_mod_fixer.models import ModStatus
@@ -136,6 +140,11 @@ def build_parser() -> argparse.ArgumentParser:
         "-w", "--watch",
         action="store_true",
         help="Launch background Downloads watcher to automatically install and repair newly downloaded mods.",
+    )
+    actions_group.add_argument(
+        "--deploy-reshade",
+        action="store_true",
+        help="Deploy tailored ReShade preset configurations (.ini) into BeamNG directory.",
     )
     actions_group.add_argument(
         "-i", "--interactive",
@@ -263,7 +272,23 @@ def main(argv: Optional[List[str]] = None) -> int:
         or args.clean_cache
         or args.all
         or args.watch
+        or args.deploy_reshade
     )
+
+    if args.deploy_reshade:
+        if not args.quiet:
+            print_splash_banner()
+            print(f"[*] Deploying tailored ReShade presets (.ini) into: {settings_dir}")
+        deployed = deploy_all_reshade_presets(settings_dir, dry_run=args.dry_run)
+        if paths.get("user_dir") and paths["user_dir"] != settings_dir:
+            deploy_all_reshade_presets(paths["user_dir"], dry_run=args.dry_run)
+        if not args.quiet:
+            print(f"  ✔ Successfully deployed {len(deployed)} ReShade presets:")
+            for p in deployed:
+                print(f"    - {p.name}")
+        else:
+            print(f"ReShade presets deployed: {len(deployed)}")
+        return 0
 
     if args.watch:
         if not args.quiet:
@@ -380,6 +405,22 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"  Settings keys tuned : {len(opt_res.applied_keys)}")
             else:
                 print(f"Graphics optimized: preset={opt_res.preset_name}, keys={len(opt_res.applied_keys)}")
+
+            # Deploy matching ReShade preset
+            reshade_map = {
+                "ultra-max-fps": "ultra-photoreal",
+                "medium-60fps": "medium-optimal",
+                "low-weak": "low-fast",
+                "potato-ultra-weak": "potato-boost",
+            }
+            rk = reshade_map.get(args.preset)
+            if rk:
+                deploy_reshade_preset(settings_dir, preset_name=rk, dry_run=args.dry_run)
+                if paths.get("user_dir") and paths["user_dir"] != settings_dir:
+                    deploy_reshade_preset(paths["user_dir"], preset_name=rk, dry_run=args.dry_run)
+                if not args.quiet:
+                    print(f"  ReShade preset      : Deployed matching '{rk}' (.ini)")
+
             if not opt_res.success:
                 success = False
         except Exception as e:

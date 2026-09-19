@@ -3,10 +3,10 @@
 [![CI](https://github.com/saleqss/beamng-mod-fixer/actions/workflows/ci.yml/badge.svg)](https://github.com/saleqss/beamng-mod-fixer/actions)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-273%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
+[![Tests](https://img.shields.io/badge/tests-280%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
 [![BeamNG Compatibility](https://img.shields.io/badge/BeamNG.drive-0.30%20--%200.34%2B-orange)](https://beamng.com)
 
-> **The all-in-one community standard toolkit for BeamNG.drive (0.30 - 0.34+).** Automatically resolves **all major mod breakages** after game updates: pitch-black headlights, rear white spotlight bug on headlights, blinding nuclear-red brake discs, weak highbeams, orange `"NO TEXTURE"` (including nested mod folder unwrapping), obsolete `materials.cs`, frozen vehicles & exploding differentials, tire blowouts (`pressurePSI`), silent engines & pre-FMOD audio crashes, and fatal vehicle Lua errors. Features a **background Downloads auto-installer**, 4 tailored graphics presets, and a clean bilingual interface.
+> **The all-in-one community standard toolkit for BeamNG.drive (0.30 - 0.34+).** Automatically resolves **all major mod breakages** after game updates: pitch-black headlights, rear white spotlight bug on headlights, blinding nuclear-red brake discs, weak highbeams, orange `"NO TEXTURE"` (including nested mod folder unwrapping), obsolete `materials.cs`, frozen vehicles & exploding differentials, tire blowouts (`pressurePSI`), silent engines & pre-FMOD audio crashes, and fatal vehicle Lua errors. Features a **background Downloads auto-installer**, 4 tailored graphics presets with **automatic ReShade preset deployment** (Medium 60FPS Optimal, Low Fast, Potato Boost, Ultra Photoreal), and a clean bilingual interface.
 
 *Читать на русском языке: [README_RU.md](README_RU.md)*
 
@@ -198,6 +198,10 @@ agy-gbeam-fix --optimize-graphics --preset ultra-max-fps
 agy-gbeam-fix --optimize-graphics --preset medium-60fps
 agy-gbeam-fix --optimize-graphics --preset potato-ultra-weak
 
+# Deploy custom ReShade presets (Medium Optimal, Low Fast, Potato Boost, Ultra Photoreal)
+agy-gbeam-fix --deploy-reshade medium-optimal
+agy-gbeam-fix --deploy-reshade ultra-photoreal
+
 # Display detected paths and active status
 agy-gbeam-fix --show-paths
 
@@ -210,9 +214,9 @@ agy-gbeam-fix --all --dry-run
 
 ---
 
-## 🧪 273 Automated Quality Tests
+## 🧪 280 Automated Quality Tests
 
-Backed by a rigorous test suite of **273 automated tests** across 5 tiers:
+Backed by a rigorous test suite of **280 automated tests** across 5 tiers:
 
 ```bash
 python -m pytest -v
@@ -221,6 +225,7 @@ python -m pytest -v
 - Verification of rear light calibration, template inheritance isolation, and quadratic attenuation falloff.
 - Verification of nested wrapper unwrapping and VFS separator normalization.
 - Verification of background `ModWatcher` file stability and auto-repair.
+- Verification of ReShade preset deployment, AMD FidelityFX CAS injection, and color balancing.
 - Full adversarial robustness against corrupt, locked, password-protected, and 6MB+ JBeam files.
 
 ---
