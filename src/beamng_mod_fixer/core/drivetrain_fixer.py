@@ -17,39 +17,44 @@ logger = logging.getLogger(__name__)
 
 # Regular expressions for JBeam drivetrain & physics patching
 
-# Differential gear ratio: gearRatio: 0 or negative
+# Differential gear ratio: gearRatio: 0, negative, or quoted "0"
 RE_DIFF_GEAR_RATIO = re.compile(
-    r'(?i)([\"\'\`]?gearRatio[\"\'\`]?\s*:\s*)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)(?![.\d])'
+    r'(?i)([\"\'\`]?gearRatio[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)([\"\'`]?)'
 )
 
 # Differential torque split: diffTorqueSplit <= 0 or >= 1.0 or negative
 RE_DIFF_TORQUE_SPLIT = re.compile(
-    r'(?i)([\"\'\`]?diffTorqueSplit[\"\'\`]?\s*:\s*)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?|[1-9]\d*(?:\.\d+)?)(?![.\d])'
+    r'(?i)([\"\'\`]?diffTorqueSplit[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?|[1-9]\d*(?:\.\d+)?)([\"\'`]?)'
 )
 
 # Viscous coupling stiffness explosion (values > 10000 cause infinite velocity in BeamNG physics)
 RE_VISCOUS_STIFFNESS = re.compile(
-    r'(?i)([\"\'\`]?viscousCoupling[\"\'\`]?\s*:\s*)([1-9]\d{4,}(?:\.\d+)?)'
+    r'(?i)([\"\'\`]?viscousCoupling[\"\'\`]?\s*:\s*[\"\'`]?)([1-9]\d{4,}(?:\.\d+)?)([\"\'`]?)'
 )
 
-# Tire pressure: pressurePSI: 0 or negative
+# Tire pressure: pressurePSI < 10.0, 0, or negative (collapses tire mesh, causes instability freeze)
 RE_TIRE_PRESSURE = re.compile(
-    r'(?i)([\"\'\`]?pressurePSI[\"\'\`]?\s*:\s*)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)(?![.\d])'
+    r'(?i)([\"\'\`]?pressurePSI[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|[0-9](?:\.[0-9]+)?)([\"\'`]?)'
 )
 
 # Wheel inertia: wheelInertia: 0 or negative
 RE_WHEEL_INERTIA = re.compile(
-    r'(?i)([\"\'\`]?wheelInertia[\"\'\`]?\s*:\s*)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)(?![.\d])'
+    r'(?i)([\"\'\`]?wheelInertia[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)([\"\'`]?)'
 )
 
 # Clutch torque: clutchTorque: 0 or negative
 RE_CLUTCH_TORQUE = re.compile(
-    r'(?i)([\"\'\`]?clutchTorque[\"\'\`]?\s*:\s*)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)(?![.\d])'
+    r'(?i)([\"\'\`]?clutchTorque[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?)([\"\'`]?)'
 )
 
 # Abnormal tire friction coefficients (<= 0.05 or > 5.0)
 RE_TIRE_FRICTION = re.compile(
-    r'(?i)([\"\'\`]?frictionCoef[\"\'\`]?\s*:\s*)(0(?:\.0[0-4]*)?|[5-9]\d*(?:\.\d+)?)(?![.\d])'
+    r'(?i)([\"\'\`]?frictionCoef[\"\'\`]?\s*:\s*[\"\'`]?)(0(?:\.0[0-4]*)?|[5-9]\d*(?:\.\d+)?)([\"\'`]?)'
+)
+
+# Extreme or negative brake torque
+RE_BRAKE_TORQUE = re.compile(
+    r'(?i)([\"\'\`]?(?:brakeTorque|brakingTorque)[\"\'\`]?\s*:\s*[\"\'`]?)(-[0-9]+(?:\.[0-9]+)?|[5-9]\d{4,}(?:\.\d+)?)([\"\'`]?)'
 )
 
 
@@ -96,7 +101,7 @@ def fix_drivetrain_content(
                     rule="diff_gearratio_fixed",
                 )
             )
-            return f"{m.group(1)}3.73"
+            return f"{m.group(1)}3.73{m.group(3)}"
 
         text = RE_DIFF_GEAR_RATIO.sub(_fix_ratio, text)
 
@@ -115,7 +120,7 @@ def fix_drivetrain_content(
                         rule="diff_torquesplit_normalized",
                     )
                 )
-                return f"{m.group(1)}0.5"
+                return f"{m.group(1)}0.5{m.group(3)}"
             return m.group(0)
 
         text = RE_DIFF_TORQUE_SPLIT.sub(_fix_split, text)
@@ -135,25 +140,28 @@ def fix_drivetrain_content(
                         rule="viscous_stiffness_clamped",
                     )
                 )
-                return f"{m.group(1)}250"
+                return f"{m.group(1)}250{m.group(3)}"
             return m.group(0)
 
         text = RE_VISCOUS_STIFFNESS.sub(_fix_viscous, text)
 
-    # 4. Fix tire pressure (pressurePSI <= 0 -> 30.0)
+    # 4. Fix tire pressure (pressurePSI < 10.0 -> 30.0)
     if "pressurepsi" in content_lower:
         def _fix_psi(m: re.Match) -> str:
-            nonlocal fix_count
-            fix_count += 1
-            diagnostics.append(
-                DiagnosticNotice(
-                    severity="warning",
-                    message="Repaired non-positive tire pressurePSI to standard 30.0 PSI (prevents flat/exploding tires)",
-                    file_path=filename,
-                    rule="tire_pressure_fixed",
+            val = float(m.group(2))
+            if val < 10.0:
+                nonlocal fix_count
+                fix_count += 1
+                diagnostics.append(
+                    DiagnosticNotice(
+                        severity="warning",
+                        message=f"Repaired unstable tire pressurePSI ({val} -> 30.0 PSI) to prevent tire collapse / simulation pause",
+                        file_path=filename,
+                        rule="tire_pressure_fixed",
+                    )
                 )
-            )
-            return f"{m.group(1)}30.0"
+                return f"{m.group(1)}30.0{m.group(3)}"
+            return m.group(0)
 
         text = RE_TIRE_PRESSURE.sub(_fix_psi, text)
 
@@ -170,7 +178,7 @@ def fix_drivetrain_content(
                     rule="wheel_inertia_fixed",
                 )
             )
-            return f"{m.group(1)}0.85"
+            return f"{m.group(1)}0.85{m.group(3)}"
 
         text = RE_WHEEL_INERTIA.sub(_fix_inertia, text)
 
@@ -188,7 +196,7 @@ def fix_drivetrain_content(
                     rule="tire_friction_normalized",
                 )
             )
-            return f"{m.group(1)}1.0"
+            return f"{m.group(1)}1.0{m.group(3)}"
 
         text = RE_TIRE_FRICTION.sub(_fix_friction, text)
 
@@ -205,9 +213,27 @@ def fix_drivetrain_content(
                     rule="clutch_torque_fixed",
                 )
             )
-            return f"{m.group(1)}350"
+            return f"{m.group(1)}350{m.group(3)}"
 
         text = RE_CLUTCH_TORQUE.sub(_fix_clutch, text)
+
+    # 8. Fix extreme or negative brake torque
+    if "braketorque" in content_lower or "brakingtorque" in content_lower:
+        def _fix_brake(m: re.Match) -> str:
+            val = float(m.group(2))
+            nonlocal fix_count
+            fix_count += 1
+            diagnostics.append(
+                DiagnosticNotice(
+                    severity="warning",
+                    message=f"Normalized extreme/negative brakeTorque ({val} -> 3500 N*m)",
+                    file_path=filename,
+                    rule="brake_torque_normalized",
+                )
+            )
+            return f"{m.group(1)}3500{m.group(3)}"
+
+        text = RE_BRAKE_TORQUE.sub(_fix_brake, text)
 
     if fix_count == 0 or text == content:
         return content, 0, diagnostics

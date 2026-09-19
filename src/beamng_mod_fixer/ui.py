@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 import sys
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from beamng_mod_fixer import __version__
 from beamng_mod_fixer.core.cache_cleaner import clean_shader_cache
@@ -170,7 +170,6 @@ class InteractiveCLI:
 
             if choice in ("1", ""):
                 self.action_global_fix()
-                pause_return()
             elif choice == "2":
                 self.menu_optics_studio()
             elif choice == "3":
@@ -185,7 +184,6 @@ class InteractiveCLI:
                 self.menu_cache_purge()
             elif choice == "8":
                 self.action_deep_audit()
-                pause_return()
             elif choice == "0":
                 print(f"\n{Colors.GREEN}Thank you for using GBEAM FIX. Happy driving!{Colors.RESET}")
                 return 0
@@ -238,7 +236,8 @@ class InteractiveCLI:
             )
         )
 
-        self._print_summary_report(summary, title="1-CLICK GLOBAL FIX SUMMARY")
+        # Transition into dedicated Post-Fix Studio Menu
+        self.menu_fix_results(summary, title="1-CLICK GLOBAL FIX RESULTS")
 
     # ==========================================================================
     # Submenu: Headlights & Optics Studio
@@ -269,8 +268,8 @@ class InteractiveCLI:
                     fix_sound=False,
                     fix_lua=False,
                 )
-                self._print_summary_report(summary, title="HEADLIGHTS FIX REPORT")
-                pause_return()
+                self.menu_fix_results(summary, title="HEADLIGHTS FIX REPORT")
+                return
             elif choice == "3":
                 print("\n[*] Normalizing angles and brightness across mods...")
                 summary = scan_and_fix_mods(
@@ -282,8 +281,8 @@ class InteractiveCLI:
                     fix_sound=False,
                     fix_lua=False,
                 )
-                self._print_summary_report(summary, title="OPTICS NORMALIZATION REPORT")
-                pause_return()
+                self.menu_fix_results(summary, title="OPTICS NORMALIZATION REPORT")
+                return
 
     # ==========================================================================
     # Submenu: Materials & Texture Doctor
@@ -312,8 +311,8 @@ class InteractiveCLI:
                     fix_sound=False,
                     fix_lua=False,
                 )
-                self._print_summary_report(summary, title="MATERIALS DOCTOR REPORT")
-                pause_return()
+                self.menu_fix_results(summary, title="MATERIALS DOCTOR REPORT")
+                return
 
     # ==========================================================================
     # Submenu: Drivetrain & Physics Repair
@@ -342,8 +341,8 @@ class InteractiveCLI:
                     fix_sound=False,
                     fix_lua=False,
                 )
-                self._print_summary_report(summary, title="DRIVETRAIN REPAIR REPORT")
-                pause_return()
+                self.menu_fix_results(summary, title="DRIVETRAIN REPAIR REPORT")
+                return
 
     # ==========================================================================
     # Submenu: Sound & Lua Crash Guard
@@ -374,8 +373,8 @@ class InteractiveCLI:
                     fix_sound=fix_snd,
                     fix_lua=fix_lua,
                 )
-                self._print_summary_report(summary, title="SOUND & LUA GUARD REPORT")
-                pause_return()
+                self.menu_fix_results(summary, title="SOUND & LUA GUARD REPORT")
+                return
 
     # ==========================================================================
     # Submenu: Graphics & FPS Optimizer
@@ -457,7 +456,75 @@ class InteractiveCLI:
             fix_lua=True,
             clean_junk=True,
         )
-        self._print_summary_report(summary, title="MOD HEALTH AUDIT REPORT")
+        # Transition into dedicated Post-Fix Studio Menu
+        self.menu_fix_results(summary, title="MOD HEALTH AUDIT REPORT")
+
+    # ==========================================================================
+    # Dedicated Post-Fix Results Studio & Diagnostic Menu
+    # ==========================================================================
+    def menu_fix_results(self, summary: OverallSummary, title: str = "FIX RESULTS & DIAGNOSTIC STUDIO") -> None:
+        """Dedicated post-fix result and diagnostic studio menu.
+
+        Directly fulfills the requirement:
+        'Чтобы фикс отправлял в другое меню и после фикса возвращал в главное'
+        """
+        while True:
+            clear_screen()
+            print(SPLASH_BANNER)
+            self._print_summary_report(summary, title=title)
+
+            print(f"\n{Colors.BOLD}{Colors.WHITE}POST-FIX ACTIONS & NAVIGATION:{Colors.RESET}")
+            print(f"  {Colors.GREEN}{Colors.BOLD}[1] 🏠 Return to Main Control Menu (Default){Colors.RESET}")
+            print(f"  {Colors.CYAN}[2] 📋 View Detailed File-by-File Diagnostic Notices & Logs{Colors.RESET}")
+            print(f"  {Colors.YELLOW}[3] 🚀 Launch Graphics & FPS Optimizer Studio{Colors.RESET}")
+            print(f"  {Colors.MAGENTA}[4] 🧹 Purge Compiled Shader Caches (.d3dcsx, .db){Colors.RESET}")
+            print(f"  {Colors.RED}[0] 🚪 Exit GBEAM FIX{Colors.RESET}")
+
+            try:
+                choice = input(f"\n{Colors.BOLD}Select an action [0-4] (default: 1): {Colors.RESET}").strip()
+            except (KeyboardInterrupt, EOFError):
+                return
+
+            if choice in ("1", ""):
+                # Return straight to Main Menu
+                return
+            elif choice == "2":
+                self._view_detailed_diagnostics(summary)
+            elif choice == "3":
+                self.menu_graphics_optimizer()
+                return
+            elif choice == "4":
+                self.menu_cache_purge()
+                return
+            elif choice == "0":
+                print(f"\n{Colors.GREEN}Thank you for using GBEAM FIX. Happy driving!{Colors.RESET}")
+                sys.exit(0)
+            else:
+                print(f"{Colors.RED}Invalid option. Please choose between 0 and 4.{Colors.RESET}")
+                time.sleep(1)
+
+    def _view_detailed_diagnostics(self, summary: OverallSummary) -> None:
+        """Display individual diagnostic notices collected across all processed archives."""
+        clear_screen()
+        print(SPLASH_BANNER)
+        print(f"{Colors.BOLD}{Colors.CYAN}📋 DETAILED MOD DIAGNOSTIC NOTICES{Colors.RESET}\n")
+
+        all_diags: List[Tuple[str, DiagnosticNotice]] = []
+        for rep in summary.archive_reports:
+            for d in rep.diagnostics:
+                all_diags.append((rep.archive_path.name, d))
+
+        if not all_diags:
+            print(f"{Colors.GREEN}✔ No warnings or issues detected! All inspected files are 100% compliant.{Colors.RESET}")
+        else:
+            print(f"Total notices recorded: {len(all_diags)}\n")
+            for idx, (arch_name, d) in enumerate(all_diags[:60], start=1):
+                sev_color = Colors.RED if d.severity == "error" else (Colors.YELLOW if d.severity == "warning" else Colors.WHITE)
+                print(f"  [{idx:02d}] {Colors.CYAN}{arch_name}{Colors.RESET} -> {sev_color}[{d.severity.upper()}]{Colors.RESET} {d.message}")
+            if len(all_diags) > 60:
+                print(f"\n  ... and {len(all_diags) - 60} more notices.")
+
+        pause_return()
 
     # ==========================================================================
     # Report Printer

@@ -105,3 +105,42 @@ def test_interactive_cli_submenu_return(tmp_path: Path) -> None:
     # Submenu: Cache Purge -> Return
     with mock.patch("builtins.input", return_value="0"):
         cli.menu_cache_purge()
+
+
+def test_interactive_cli_menu_fix_results(tmp_path: Path) -> None:
+    """Test that menu_fix_results displays report and returns to main menu on choice 1 or Enter."""
+    from beamng_mod_fixer.models import OverallSummary, ModArchiveReport, DiagnosticNotice
+
+    summary = OverallSummary()
+    rep = ModArchiveReport(archive_path=tmp_path / "test.zip")
+    rep.diagnostics.append(DiagnosticNotice(severity="info", message="Fixed spotlight angles"))
+    summary.archive_reports.append(rep)
+
+    cli = InteractiveCLI(dry_run=True)
+
+    # Choice "1" returns to main menu
+    with mock.patch("builtins.input", return_value="1"):
+        cli.menu_fix_results(summary, title="TEST FIX RESULTS")
+
+    # Default Enter ("") returns to main menu
+    with mock.patch("builtins.input", return_value=""):
+        cli.menu_fix_results(summary, title="TEST FIX RESULTS")
+
+
+def test_interactive_cli_view_detailed_diagnostics(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Test displaying detailed diagnostic notices list."""
+    from beamng_mod_fixer.models import OverallSummary, ModArchiveReport, DiagnosticNotice
+
+    summary = OverallSummary()
+    rep = ModArchiveReport(archive_path=tmp_path / "my_mod.zip")
+    rep.diagnostics.append(DiagnosticNotice(severity="warning", message="Unstable tire pressure"))
+    summary.archive_reports.append(rep)
+
+    cli = InteractiveCLI(dry_run=True)
+    with mock.patch("builtins.input", return_value=""):
+        cli._view_detailed_diagnostics(summary)
+
+    out = capsys.readouterr().out
+    assert "DETAILED MOD DIAGNOSTIC NOTICES" in out
+    assert "my_mod.zip" in out
+    assert "Unstable tire pressure" in out

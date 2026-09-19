@@ -75,21 +75,31 @@ def fix_lua_content(
 
         text = RE_GUIHOOKS_TRIGGER.sub(_fix_guihooks, text)
 
-    # 3. Add safety preamble if script uses v.data without local check
-    if "v.data" in text and "local v = v or" not in text and "if not v" not in text:
-        preamble = (
-            "-- [GBEAM FIX] Guard against uninitialized v / v.data\n"
-            "local v = v or { data = {} }\n"
-            "if type(v) == 'table' and not v.data then v.data = {} end\n"
-        )
+    # 3. Add safety preamble if script uses v.data or electrics without local check
+    needs_vdata = "v.data" in text and "local v = v or" not in text and "if not v" not in text
+    needs_electrics = "electrics" in text and "local electrics = electrics or" not in text and "if not electrics" not in text
+
+    if needs_vdata or needs_electrics:
+        preamble_lines = ["-- [GBEAM FIX] Guard against uninitialized vehicle globals"]
+        if needs_vdata:
+            preamble_lines.extend([
+                "local v = v or { data = {} }",
+                "if type(v) == 'table' and not v.data then v.data = {} end",
+            ])
+        if needs_electrics:
+            preamble_lines.extend([
+                "local electrics = electrics or { values = {} }",
+                "if type(electrics) == 'table' and not electrics.values then electrics.values = {} end",
+            ])
+        preamble = "\n".join(preamble_lines) + "\n"
         text = preamble + text
         fix_count += 1
         diagnostics.append(
             DiagnosticNotice(
                 severity="info",
-                message="Injected safe initialization preamble for global v.data table",
+                message="Injected safe initialization preamble for global tables (v.data / electrics.values)",
                 file_path=filename,
-                rule="lua_vdata_guard_injected",
+                rule="lua_globals_guard_injected",
             )
         )
 

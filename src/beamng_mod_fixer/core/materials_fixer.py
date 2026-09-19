@@ -22,12 +22,13 @@ logger = logging.getLogger(__name__)
 RE_CS_COMMENT_SINGLE = re.compile(r'//[^\n]*')
 RE_CS_COMMENT_MULTI = re.compile(r'/\*[\s\S]*?\*/')
 
-RE_CS_MATERIAL_BLOCK = re.compile(
-    r'(?i)(?:singleton|new)\s+Material\s*\(\s*([a-zA-Z0-9_]+)\s*\)\s*\{([^}]+)\};'
+# Matches: singleton Material("name"), singleton Material(name), singleton Material(name : parent), etc.
+RE_CS_MATERIAL_HEADER = re.compile(
+    r'(?i)(?:singleton|new)\s+(?:Custom)?Material\s*\(\s*(?:([\"\'`])([^\"\'`]+)\1|([a-zA-Z0-9_\-\.\/]+))(?:\s*:\s*[\"\'`]?([a-zA-Z0-9_\-\.]+)[\"\'`]?)?\s*\)\s*\{'
 )
 
 RE_CS_PROPERTY = re.compile(
-    r'^\s*([a-zA-Z0-9_]+)(?:\[(\d+)\])?\s*=\s*(.*?)\s*;',
+    r'^\s*([a-zA-Z0-9_\-\.]+)(?:\[(\d+)\])?\s*=\s*(.*?)\s*(?:;|$)',
     re.MULTILINE
 )
 
@@ -42,13 +43,20 @@ LIGHT_MATERIAL_KEYWORDS = (
 def _strip_cs_quotes(val: str) -> str:
     """Strip surrounding quotes from a TorqueScript property value."""
     val = val.strip()
-    if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
-        return val[1:-1]
+    if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")) or (val.startswith("`") and val.endswith("`")):
+        return val[1:-1].strip()
     return val
 
 
 def parse_materials_cs(cs_content: str) -> Dict[str, Dict[str, Any]]:
     """Parse TorqueScript materials.cs content into structured material definitions.
+
+    Supports:
+    - Standard unquoted names: singleton Material(mat_name)
+    - Quoted names: singleton Material("mat_name"), singleton Material('mat_name')
+    - Inheritance: singleton Material(mat_name : ParentMat)
+    - Dashed, dotted, and path names: singleton Material("vehicles/car/gauges")
+    - Tolerant brace matching and optional trailing semicolons
 
     Args:
         cs_content: Raw text content of a materials.cs file.
@@ -62,9 +70,25 @@ def parse_materials_cs(cs_content: str) -> Dict[str, Dict[str, Any]]:
 
     materials: Dict[str, Dict[str, Any]] = {}
 
-    for match in RE_CS_MATERIAL_BLOCK.finditer(clean_text):
-        mat_name = match.group(1).strip()
-        body = match.group(2)
+    for match in RE_CS_MATERIAL_HEADER.finditer(clean_text):
+        mat_name = (match.group(2) or match.group(3) or "").strip()
+        if not mat_name:
+            continue
+
+        body_start = match.end()
+        # Find matching closing brace using depth tracking
+        depth = 1
+        i = body_start
+        n = len(clean_text)
+        while i < n and depth > 0:
+            c = clean_text[i]
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+            i += 1
+
+        body = clean_text[body_start : i - 1]
 
         props: Dict[str, Any] = {
             "stages": [{}, {}, {}, {}],
@@ -112,7 +136,7 @@ def parse_materials_cs(cs_content: str) -> Dict[str, Dict[str, Any]]:
                 if is_glow:
                     stage["emissiveFactor"] = [1.0, 1.0, 1.0]
 
-        if "mapTo" not in props:
+        if "mapTo" not in props or not props["mapTo"]:
             props["mapTo"] = mat_name
 
         materials[mat_name] = props
@@ -244,15 +268,14 @@ def _reconcile_texture_path(
         matched_actual = available_lower[norm_lower]
         return matched_actual, (matched_actual != orig)
 
-    # 2. Try PNG <-> DDS swap
-    if norm_lower.endswith(".png"):
-        dds_cand = norm_lower[:-4] + ".dds"
-        if dds_cand in available_lower:
-            return available_lower[dds_cand], True
-    elif norm_lower.endswith(".dds"):
-        png_cand = norm_lower[:-4] + ".png"
-        if png_cand in available_lower:
-            return available_lower[png_cand], True
+    # 2. Try format swaps on direct path (.dds, .png, .jpg, .jpeg, .tga)
+    IMAGE_EXTENSIONS = (".dds", ".png", ".jpg", ".jpeg", ".tga")
+    for ext in IMAGE_EXTENSIONS:
+        if norm_lower.endswith(ext):
+            base_no_ext = norm_lower[:-len(ext)]
+            for alt_ext in IMAGE_EXTENSIONS:
+                if alt_ext != ext and (base_no_ext + alt_ext) in available_lower:
+                    return available_lower[base_no_ext + alt_ext], True
 
     # 3. Basename lookup: if full VFS path has wrong folder prefix, find by filename in archive
     file_name = norm_lower.split("/")[-1]
@@ -261,8 +284,18 @@ def _reconcile_texture_path(
         if low.endswith("/" + file_name) or low == file_name
     ]
     if len(candidate_matches) == 1:
-        # Unambiguous match found in archive!
+        # Unambiguous exact filename match found in archive!
         return candidate_matches[0], True
+
+    # 4. Basename stem lookup across image extensions (.png <-> .dds <-> .jpg <-> .tga)
+    stem = file_name.rsplit(".", 1)[0] if "." in file_name else file_name
+    stem_matches = [
+        actual for low, actual in available_lower.items()
+        if any(low.endswith("/" + stem + alt_ext) or low == (stem + alt_ext) for alt_ext in IMAGE_EXTENSIONS)
+    ]
+    if len(stem_matches) == 1:
+        # Unambiguous stem match found across formats!
+        return stem_matches[0], True
 
     return norm, changed
 

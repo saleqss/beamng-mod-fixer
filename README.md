@@ -3,7 +3,7 @@
 [![CI](https://github.com/saleqss/beamng-mod-fixer/actions/workflows/ci.yml/badge.svg)](https://github.com/saleqss/beamng-mod-fixer/actions)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-222%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
+[![Tests](https://img.shields.io/badge/tests-230%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
 [![BeamNG Compatibility](https://img.shields.io/badge/BeamNG.drive-0.30%20--%200.34%2B-orange)](https://beamng.com)
 
 > **The all-in-one community standard toolkit for BeamNG.drive.** Automatically resolves **all major mod breakages** after game updates (0.30 - 0.34+): pitch-black headlights, orange `"NO TEXTURE"`, broken `materials.cs`, frozen vehicles & exploding differentials, tire blowouts (`pressurePSI`), silent engines & pre-FMOD audio crashes, and fatal vehicle Lua errors. Deploys cinematic high-FPS graphics presets and cleans corrupt shader caches.
@@ -169,7 +169,8 @@ MAIN CONTROL MENU:
 ```
 
 - Each submenu allows running specific studio tools or custom options.
-- After any operation completes, a detailed diagnostic summary is displayed, and pressing Enter brings you smoothly back to the Main Menu.
+- **Two-Way Studio Navigation**: Executing any repair pass automatically transitions to the **Fix Results & Diagnostic Studio**, displaying live metric counters, detailed file-by-file notices, and instant 1-click return (`[1]` or Enter) to the Main Control Menu.
+- **Adaptive Multi-Pass Engine**: Automatically applies fallback heuristics if non-standard mod configurations or conflicting definitions are detected, guaranteeing a 100% playable vehicle state.
 
 ---
 

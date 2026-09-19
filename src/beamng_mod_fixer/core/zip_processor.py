@@ -17,6 +17,7 @@ Provides:
 """
 
 import logging
+import json
 import os
 from pathlib import Path
 import struct
@@ -316,7 +317,36 @@ def process_mod_archive(
                             report.diagnostics.extend(cs_diags)
                             dirname = entry.filename.rsplit("/", 1)[0] if "/" in entry.filename else ""
                             target_json = f"{dirname}/main.materials.json" if dirname else "main.materials.json"
-                            added_files[target_json] = json_str.encode("utf-8")
+
+                            new_mats = json.loads(json_str)
+                            # Merge if target_json was already modified
+                            if target_json in modified_files:
+                                try:
+                                    existing = json.loads(modified_files[target_json].decode("utf-8"))
+                                    existing.update(new_mats)
+                                    modified_files[target_json] = json.dumps(existing, indent=2, ensure_ascii=False).encode("utf-8")
+                                except Exception:
+                                    modified_files[target_json] = json_str.encode("utf-8")
+                            # Merge if target_json exists in the source archive
+                            elif target_json in available_filenames:
+                                try:
+                                    existing_raw = zf.read(target_json)
+                                    existing_text, _ = decode_jbeam_bytes(existing_raw)
+                                    existing = json.loads(existing_text)
+                                    existing.update(new_mats)
+                                    modified_files[target_json] = json.dumps(existing, indent=2, ensure_ascii=False).encode("utf-8")
+                                except Exception:
+                                    modified_files[target_json] = json_str.encode("utf-8")
+                            # Merge if target_json was added by another .cs file
+                            elif target_json in added_files:
+                                try:
+                                    existing = json.loads(added_files[target_json].decode("utf-8"))
+                                    existing.update(new_mats)
+                                    added_files[target_json] = json.dumps(existing, indent=2, ensure_ascii=False).encode("utf-8")
+                                except Exception:
+                                    added_files[target_json] = json_str.encode("utf-8")
+                            else:
+                                added_files[target_json] = json_str.encode("utf-8")
                     except Exception as cs_err:
                         report.diagnostics.append(
                             DiagnosticNotice(
@@ -329,7 +359,10 @@ def process_mod_archive(
                 # 4c. Modern materials JSON files (*.materials.json)
                 elif fix_materials and entry_name_lower.endswith(".materials.json") and not entry.is_dir():
                     try:
-                        raw_data = zf.read(entry.filename)
+                        if entry.filename in modified_files:
+                            raw_data = modified_files[entry.filename]
+                        else:
+                            raw_data = zf.read(entry.filename)
                         json_text, encoding = decode_jbeam_bytes(raw_data)
                         repaired_json, mat_count, mat_diags = fix_materials_json_content(
                             json_text,

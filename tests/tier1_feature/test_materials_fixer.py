@@ -135,3 +135,39 @@ def test_materials_json_emissive_restoration() -> None:
     assert fix_count >= 1
     data = json.loads(fixed_json_str)
     assert data["vehicle_taillight_glass"]["Stages"][0]["emissiveFactor"] == [1.0, 1.0, 1.0]
+
+
+def test_materials_cs_quoted_and_inherited() -> None:
+    """Test materials.cs definitions with quotes and inheritance."""
+    cs = """
+    singleton Material("supercar_gauges")
+    {
+       mapTo = "supercar_gauges";
+       diffuseMap[0] = "gauges.dds";
+    };
+    singleton Material(car_chrome : DefaultMaterial)
+    {
+       mapTo = "car_chrome";
+       diffuseMap[0] = "chrome.dds";
+    };
+    singleton Material(car_glass)
+    {
+       mapTo = "car_glass";
+       diffuseMap[0] = "glass.dds";
+    }
+    """
+    res = parse_materials_cs(cs)
+    assert "supercar_gauges" in res
+    assert "car_chrome" in res
+    assert "car_glass" in res
+
+
+def test_reconcile_texture_cross_folder_extension() -> None:
+    """Test texture reconciliation when file has different folder and extension in archive."""
+    from beamng_mod_fixer.core.materials_fixer import _reconcile_texture_path
+
+    available = {"art/textures/gauge.png"}
+    reconciled, changed = _reconcile_texture_path("vehicles/supercar/gauge.dds", available)
+    assert reconciled == "art/textures/gauge.png"
+    assert changed is True
+

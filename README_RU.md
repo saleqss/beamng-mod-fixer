@@ -3,7 +3,7 @@
 [![CI](https://github.com/saleqss/beamng-mod-fixer/actions/workflows/ci.yml/badge.svg)](https://github.com/saleqss/beamng-mod-fixer/actions)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-222%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
+[![Tests](https://img.shields.io/badge/tests-230%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
 [![Совместимость BeamNG](https://img.shields.io/badge/BeamNG.drive-0.30%20--%200.34%2B-orange)](https://beamng.com)
 
 > **Универсальный инструмент для полного устранения всех багов модов после обновлений BeamNG.drive (0.30 - 0.34+).** Автоматически исправляет **черные фары**, оранжевые текстуры **"NO TEXTURE"**, устаревшие **`materials.cs`**, зависающие машины и **взрывающиеся дифференциалы**, разорванные колеса и нулевое давление в шинах (**`pressurePSI`**), немые звуки моторов и краши аудио до-FMOD, а также фатальные ошибки кастомных **Lua-скриптов**. Применяет пресет кинематографичной графики на 60+ FPS и безопасно очищает кэш шейдеров.

@@ -195,3 +195,20 @@ def test_scan_and_fix_mods_aggregates_all_domains(tmp_path: Path) -> None:
     assert summary.sounds_fixed >= 4
     assert summary.lua_fixed >= 4
     assert summary.junk_cleaned >= 2
+
+
+def test_materials_cs_and_json_merge_in_archive(tmp_path: Path) -> None:
+    """Test that when an archive contains both main.materials.json and materials.cs, neither is lost."""
+    zip_path = tmp_path / "merge_test.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("vehicles/car/main.materials.json", json.dumps({"existing_mat": {"version": 1.5, "Stages": [{}]}}))
+        zf.writestr("vehicles/car/materials.cs", 'singleton Material("cs_mat") { mapTo = "cs_mat"; diffuseMap[0] = "car.png"; };')
+
+    rep = process_mod_archive(zip_path, fix_materials=True)
+    assert rep.status == ModStatus.FIXED.value
+
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        data = json.loads(zf.read("vehicles/car/main.materials.json"))
+        assert "existing_mat" in data
+        assert "cs_mat" in data, f"Converted cs_mat must be merged into main.materials.json! Got: {list(data.keys())}"
+

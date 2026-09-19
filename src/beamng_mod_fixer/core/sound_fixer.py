@@ -22,15 +22,9 @@ MODERN_TRANSMISSION_EVENT = "event:>Vehicles>Transmission>transmission_manual_01
 MODERN_HORN_EVENT = "event:>Vehicles>Horn>horn_01"
 
 # Obsolete pre-FMOD sound paths (art/sound/... or .wav/.ogg direct file references)
-RE_OBSOLETE_SOUND_PATH = re.compile(
-    r'(?i)([\"\'\`]?(?:sampleName|soundFile|soundEvent|audioProfile)[\"\'\`]?\s*:\s*[\"\'`])'
-    r'(?:/*art/sound/[^\"\'`]+|[^\"\'`]+\.(?:wav|ogg))([\"\'`])'
-)
-
-# Obsolete event:>art> paths
-RE_OBSOLETE_EVENT_ART = re.compile(
-    r'(?i)([\"\'\`]?(?:sampleName|soundFile|soundEvent)[\"\'\`]?\s*:\s*[\"\'`])'
-    r'event:>art>[^\"\'`]+([\"\'`])'
+RE_OBSOLETE_SOUND_PROPERTY = re.compile(
+    r'(?i)([\"\'\`]?(?P<key>sampleName|soundFile|soundEvent|audioProfile|soundProfile|hornSound|bovSound|blowoffSound|turboSound|transmissionSound|engineSound|exhaustSound)[\"\'\`]?\s*:\s*[\"\'`])'
+    r'(?:/*art/sound/[^\"\'`]+|[^\"\'`]+\.(?:wav|ogg|sfx)|event:>art>[^\"\'`]+)([\"\'`])'
 )
 
 # Out of range soundVolume or soundPitch
@@ -40,6 +34,18 @@ RE_SOUND_VOLUME = re.compile(
 RE_SOUND_PITCH = re.compile(
     r'(?i)([\"\'\`]?soundPitch[\"\'\`]?\s*:\s*)(-[0-9]+(?:\.[0-9]+)?|0(?:\.0+)?|[4-9]\d*(?:\.\d+)?)(?![.\d])'
 )
+
+
+def _select_modern_event(key_name: str) -> str:
+    """Select appropriate modern BeamNG FMOD event based on property context."""
+    k = key_name.lower()
+    if "horn" in k:
+        return MODERN_HORN_EVENT
+    elif "transmission" in k or "gearbox" in k:
+        return MODERN_TRANSMISSION_EVENT
+    elif any(t in k for t in ("turbo", "bov", "blowoff", "wastegate")):
+        return "event:>Vehicles>Turbo>turbo_01"
+    return MODERN_ENGINE_EVENT
 
 
 def fix_sound_content(
@@ -62,45 +68,30 @@ def fix_sound_content(
     text = content
     content_lower = content.lower()
 
-    has_sound = any(k in content_lower for k in ("sound", "samplename", "audioprofile", "soundevent", "soundconfig"))
+    has_sound = any(k in content_lower for k in ("sound", "samplename", "audioprofile", "soundevent", "soundconfig", "hornsound", "soundprofile"))
     if not has_sound:
         return content, 0, diagnostics
 
     fix_count = 0
 
-    # 1. Obsolete sound file/path references (art/sound/* -> event:>Engine>default)
-    if "art/sound/" in content_lower or ".wav" in content_lower or ".ogg" in content_lower:
+    # 1. Obsolete sound file/path references modernized to context-specific FMOD event
+    if any(tok in content_lower for tok in ("art/sound/", ".wav", ".ogg", ".sfx", "event:>art>")):
         def _replace_sound(m: re.Match) -> str:
             nonlocal fix_count
             fix_count += 1
+            prop_key = m.group("key")
+            modern_event = _select_modern_event(prop_key)
             diagnostics.append(
                 DiagnosticNotice(
                     severity="info",
-                    message="Modernized legacy sound path to modern BeamNG FMOD event 'event:>Engine>default'",
+                    message=f"Modernized legacy sound path in '{prop_key}' to modern BeamNG FMOD event '{modern_event}'",
                     file_path=filename,
                     rule="sound_path_modernized",
                 )
             )
-            return f"{m.group(1)}{MODERN_ENGINE_EVENT}{m.group(2)}"
+            return f"{m.group(1)}{modern_event}{m.group(3)}"
 
-        text = RE_OBSOLETE_SOUND_PATH.sub(_replace_sound, text)
-
-    # 2. Obsolete event:>art> references
-    if "event:>art>" in content_lower:
-        def _replace_event_art(m: re.Match) -> str:
-            nonlocal fix_count
-            fix_count += 1
-            diagnostics.append(
-                DiagnosticNotice(
-                    severity="info",
-                    message="Replaced obsolete event:>art> reference with modern BeamNG FMOD event",
-                    file_path=filename,
-                    rule="sound_event_art_modernized",
-                )
-            )
-            return f"{m.group(1)}{MODERN_ENGINE_EVENT}{m.group(2)}"
-
-        text = RE_OBSOLETE_EVENT_ART.sub(_replace_event_art, text)
+        text = RE_OBSOLETE_SOUND_PROPERTY.sub(_replace_sound, text)
 
     # 3. Sound volume normalization
     if "soundvolume" in content_lower:

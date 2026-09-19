@@ -88,3 +88,51 @@ return M
     assert "local v = v or" in fixed
     assert "obj.queueGameEngineLua" in fixed
     assert "guihooks and guihooks.trigger" in fixed
+
+
+def test_drivetrain_quoted_and_low_psi() -> None:
+    """Test drivetrain repairs with quoted numbers and dangerously low tire PSI."""
+    jbeam = """
+    "differential_R": {
+        "gearRatio": "0",
+        "diffTorqueSplit": 0.0
+    },
+    "wheel_RR": {
+        "pressurePSI": 2.0,
+        "clutchTorque": "0"
+    }
+    """
+    fixed, count, diags = fix_drivetrain_content(jbeam)
+    assert count >= 3
+    assert '3.73' in fixed
+    assert '30.0' in fixed
+    assert '350' in fixed
+
+
+def test_sound_horn_and_context_mapping() -> None:
+    """Test context-aware sound modernization for horn and transmission."""
+    jbeam = """
+    "horn": {
+        "hornSound": "art/sound/horn.wav"
+    },
+    "engine": {
+        "soundProfile": "art/sound/v8.wav"
+    }
+    """
+    fixed, count, diags = fix_sound_content(jbeam)
+    assert count == 2
+    assert "event:>Vehicles>Horn>" in fixed
+    assert "event:>Engine>" in fixed
+
+
+def test_lua_electrics_table_guard() -> None:
+    """Test that electrics table is guarded in Lua scripts."""
+    lua = """
+    local function update(dt)
+        local val = electrics.values.headlight
+    end
+    """
+    fixed, count, diags = fix_lua_content(lua)
+    assert count > 0
+    assert "electrics" in fixed
+
