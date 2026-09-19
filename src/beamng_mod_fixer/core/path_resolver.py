@@ -95,10 +95,12 @@ def load_cached_paths() -> Optional[Dict[str, Path]]:
 
 def save_cached_paths(paths: Dict[str, Path], force: bool = False) -> bool:
     """Save validated BeamNG paths to persistent cache for instant 0ms retrieval."""
-    # Safety check: avoid caching temporary test directories from pytest unless forced
+    # Safety check: avoid caching temporary test directories unless forced
     if not force:
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return False
         user_str = str(paths.get("user_dir", "")).lower()
-        if "pytest" in user_str:
+        if "pytest" in user_str or "temp" in user_str or "tmp" in user_str:
             return False
 
     cache_file = get_cache_config_path()
@@ -111,7 +113,9 @@ def save_cached_paths(paths: Dict[str, Path], force: bool = False) -> bool:
             "cache_dir": str(paths["cache_dir"].resolve()),
             "timestamp": time.time(),
         }
-        cache_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        tmp_file = cache_file.with_suffix(".tmp")
+        tmp_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        os.replace(tmp_file, cache_file)
         return True
     except Exception as e:
         logger.debug("Failed saving persistent path cache: %s", e)
@@ -176,19 +180,20 @@ def parse_steam_library_folders(vdf_path: Path) -> List[Path]:
     except Exception:
         return []
 
-    # Matches "path"\s+"([^"]+)"
+    # Matches modern format: "path"\s+"([^"]+)"
     for m in re.finditer(r'"path"\s+"([^"]+)"', content, re.IGNORECASE):
         raw = m.group(1).replace(r"\\", "\\")
         p = Path(raw)
         if p.exists() and p not in libraries:
             libraries.append(p)
 
-    # Legacy VDF format: "1"\t\t"D:\\SteamLibrary"
+    # Legacy VDF format: "1"\t\t"D:\\SteamLibrary" (ensure value contains path separators)
     for m in re.finditer(r'"\d+"\s+"([^"]+)"', content):
         raw = m.group(1).replace(r"\\", "\\")
-        p = Path(raw)
-        if p.exists() and p not in libraries:
-            libraries.append(p)
+        if (":" in raw or "/" in raw or "\\" in raw):
+            p = Path(raw)
+            if p.exists() and p not in libraries:
+                libraries.append(p)
 
     return libraries
 
@@ -205,18 +210,25 @@ def parse_startup_ini_userpath(ini_path: Path, game_dir: Path) -> Optional[Path]
                 key, _, val = line.partition("=")
                 if key.strip().lower() == "userpath":
                     val = val.strip().strip('"').strip("'")
-                    if val and val != ".\\":
+                    if val:
+                        val = os.path.expandvars(os.path.expanduser(val))
+                        if val in (".\\", "./", "."):
+                            return game_dir.resolve()
                         p = Path(val)
                         if not p.is_absolute():
                             p = (game_dir / p).resolve()
-                        return p
+                        return p.resolve()
     except Exception:
         pass
     return None
 
 
 def find_steam_beamng_dirs() -> List[Path]:
-    """Discover BeamNG game installation and user data directories from Steam."""
+    """Discover BeamNG game installation and user data directories from Steam.
+
+    Checks Steam App ID 284160, appmanifest_284160.acf, libraryfolders.vdf,
+    and startup.ini userPath directives.
+    """
     discovered: List[Path] = []
     steam_roots = get_steam_install_paths()
     all_libs: List[Path] = list(steam_roots)
@@ -228,7 +240,19 @@ def find_steam_beamng_dirs() -> List[Path]:
                 all_libs.append(lib)
 
     for lib in all_libs:
-        game_dir = lib / "steamapps" / "common" / "BeamNG.drive"
+        # Check for BeamNG Steam manifest: appmanifest_284160.acf
+        manifest = lib / "steamapps" / f"appmanifest_{BEAMNG_STEAM_APP_ID}.acf"
+        installdir = "BeamNG.drive"
+        if manifest.exists():
+            try:
+                m_content = manifest.read_text(encoding="utf-8", errors="replace")
+                m = re.search(r'"installdir"\s+"([^"]+)"', m_content, re.IGNORECASE)
+                if m:
+                    installdir = m.group(1).strip()
+            except OSError:
+                pass
+
+        game_dir = lib / "steamapps" / "common" / installdir
         if game_dir.exists() and game_dir.is_dir():
             startup_ini = game_dir / "startup.ini"
             if startup_ini.exists():
@@ -236,8 +260,12 @@ def find_steam_beamng_dirs() -> List[Path]:
                 if up and up.exists() and up not in discovered:
                     discovered.append(up)
 
-            # Check if game directory itself contains user/mods
+            # Check if game directory itself contains mods or content
             if (game_dir / "mods").exists() and game_dir not in discovered:
+                discovered.append(game_dir)
+            elif (game_dir / "content" / "mods").exists() and game_dir not in discovered:
+                discovered.append(game_dir)
+            elif game_dir not in discovered:
                 discovered.append(game_dir)
 
     return discovered
@@ -247,11 +275,33 @@ def find_steam_beamng_dirs() -> List[Path]:
 # 3. Common Drive Roots Discovery
 # ==============================================================================
 def get_available_drives() -> List[str]:
-    """Get list of accessible drive roots on Windows (C:, D:, E:, etc.)."""
+    """Get list of accessible drive roots on Windows (C:, D:, E:, etc.).
+
+    Uses Windows GetLogicalDrives bitmask and GetDriveType for instant 0ms,
+    hang-free logical drive enumeration, filtering out CD-ROM / optical drives.
+    """
     if sys.platform != "win32":
         return []
+
     drives: List[str] = []
-    # Test common drive letters C-Z quickly
+    try:
+        import ctypes
+        # Suppress critical error dialogs (e.g. empty optical drive or disconnected volume)
+        ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x8000)
+        bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+        for i, letter in enumerate("ABCDEFGHIJKLMNOPQRSTUVWXYZ"):
+            if bitmask & (1 << i):
+                root = f"{letter}:\\"
+                dtype = ctypes.windll.kernel32.GetDriveTypeW(root)
+                # Exclude CD-ROM / optical drives (5)
+                if dtype != 5:
+                    drives.append(root)
+        if drives:
+            return drives
+    except Exception:
+        pass
+
+    # Fallback enumeration
     for letter in "CDEFGHIJKLMNOPQRSTUVWXYZ":
         drive_path = Path(f"{letter}:\\")
         try:
@@ -271,8 +321,15 @@ def find_drive_root_candidates() -> List[Path]:
         "BeamNG/BeamNG.drive",
         "Games/BeamNG.drive",
         "Games/BeamNG/BeamNG.drive",
+        "Games/BeamNG-drive",
+        "Steam/steamapps/common/BeamNG.drive",
+        "Games/Steam/steamapps/common/BeamNG.drive",
         "SteamLibrary/steamapps/common/BeamNG.drive",
         "Games/SteamLibrary/steamapps/common/BeamNG.drive",
+        "Program Files/BeamNG.drive",
+        "Program Files (x86)/BeamNG.drive",
+        "Program Files/Steam/steamapps/common/BeamNG.drive",
+        "Program Files (x86)/Steam/steamapps/common/BeamNG.drive",
     ]
     for d in drives:
         drive_path = Path(d)
@@ -299,7 +356,8 @@ def find_drive_root_candidates() -> List[Path]:
 def score_candidate_user_dir(candidate: Path) -> float:
     """Calculate an activity score for a candidate BeamNG user directory.
 
-    Prioritizes directories with active mod archives, valid settings, and recent modification.
+    Prioritizes directories with active mod archives, valid settings, recent modification,
+    and modern version topologies (current, latest, 0.34...).
     """
     if not candidate.exists() or not candidate.is_dir():
         return -1.0
@@ -331,7 +389,7 @@ def score_candidate_user_dir(candidate: Path) -> float:
     if temp_dir.exists() and temp_dir.is_dir():
         score += 50.0
 
-    # 4. Version and naming bonuses
+    # 4. Version and naming bonuses (current > latest > 0.34 > 0.33 > 0.30)
     name_lower = candidate.name.lower()
     if name_lower == "current":
         score += 100.0
@@ -343,19 +401,36 @@ def score_candidate_user_dir(candidate: Path) -> float:
         if ver_match:
             try:
                 minor_ver = int(ver_match.group(1))
-                score += minor_ver * 2.0  # Newer versions score slightly higher
+                score += minor_ver * 2.0  # Newer versions score higher
             except ValueError:
                 pass
 
-    # 5. Modification recency (tie breaker)
+    # 5. Modification recency & active game launch logs (tie breaker)
     try:
         mtimes: List[float] = [candidate.stat().st_mtime]
         if mods_dir.exists():
             mtimes.append(mods_dir.stat().st_mtime)
         if settings_dir.exists():
             mtimes.append(settings_dir.stat().st_mtime)
+        # Check active log files created on game execution
+        for log_name in ("beamng.log", "beamng-launcher.log"):
+            log_file = candidate / log_name
+            if log_file.exists():
+                mtimes.append(log_file.stat().st_mtime)
+                score += 50.0
+
         newest_mtime = max(mtimes)
-        score += (newest_mtime / 1e9)  # Small fraction to favor recent folders
+        # Recency window scoring
+        now = time.time()
+        age_days = max(0.0, (now - newest_mtime) / 86400.0)
+        if age_days < 7.0:
+            score += 300.0
+        elif age_days < 30.0:
+            score += 150.0
+        elif age_days < 90.0:
+            score += 50.0
+
+        score += (newest_mtime / 1e9)  # Fine-grained fraction for tie-breaking
     except OSError:
         pass
 
@@ -510,7 +585,7 @@ def validate_beamng_dir(input_path: Path | str, is_mods_dir: bool = False) -> Tu
         return False, "Path is empty.", {}
 
     s = os.path.expandvars(os.path.expanduser(s))
-    path = Path(s)
+    path = Path(s).resolve()
 
     if not path.exists():
         return False, f"Directory does not exist: {path}", {}
@@ -530,9 +605,19 @@ def validate_beamng_dir(input_path: Path | str, is_mods_dir: bool = False) -> Tu
         resolved_mods = path / "mods"
         resolved_settings = path / "settings"
         resolved_cache = path / "temp"
+    elif (path / "content" / "mods").exists() and (path / "content" / "mods").is_dir():
+        # Game installation folder with content/mods
+        resolved_user = path
+        resolved_mods = path / "content" / "mods"
+        resolved_settings = path / "settings"
+        resolved_cache = path / "temp"
     else:
         # Check if this folder itself contains .zip mod files
-        zip_count = len([p for p in path.iterdir() if p.is_file() and p.suffix.lower() == ".zip"])
+        zip_count = 0
+        try:
+            zip_count = len([p for p in path.iterdir() if p.is_file() and p.suffix.lower() == ".zip"])
+        except OSError:
+            pass
         if zip_count > 0:
             resolved_mods = path
             resolved_user = path.parent

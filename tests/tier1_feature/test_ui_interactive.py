@@ -216,3 +216,52 @@ def test_interactive_cli_menu_paths_manager(tmp_path: Path) -> None:
     with mock.patch("builtins.input", side_effect=["4", "", "0"]):
         cli.menu_paths_manager()
 
+
+def test_interactive_cli_bracketed_choices(tmp_path: Path) -> None:
+    """Test that input with brackets like '[1]' works identically to '1'."""
+    paths = {
+        "user_dir": tmp_path,
+        "mods_dir": tmp_path / "mods",
+        "settings_dir": tmp_path / "settings",
+        "cache_dir": tmp_path / "temp",
+    }
+    cli = InteractiveCLI(paths=paths, dry_run=True)
+
+    # Main menu: "[0]" exits cleanly
+    with mock.patch("builtins.input", return_value="[0]"):
+        assert cli.run_main_menu() == 0
+
+    # menu_fix_results: "[1]" returns cleanly
+    from beamng_mod_fixer.models import OverallSummary
+    with mock.patch("builtins.input", return_value="[1]"):
+        cli.menu_fix_results(OverallSummary())
+
+
+def test_interactive_cli_missing_mods_dir_does_not_crash(tmp_path: Path) -> None:
+    """Test action_global_fix handles missing mods_dir safely without crashing."""
+    paths = {
+        "user_dir": tmp_path,
+        "mods_dir": tmp_path / "non_existent_mods",
+        "settings_dir": tmp_path / "settings",
+        "cache_dir": tmp_path / "temp",
+    }
+    cli = InteractiveCLI(paths=paths, dry_run=True)
+    with mock.patch("builtins.input", return_value="1"):
+        cli.action_global_fix()
+
+
+def test_interactive_cli_summary_report_with_pipeline_status(capsys: pytest.CaptureFixture[str]) -> None:
+    """Test _print_summary_report outputs graphics and cache pipeline status when supplied."""
+    from beamng_mod_fixer.models import OverallSummary
+    cli = InteractiveCLI(dry_run=True)
+    cli._print_summary_report(
+        OverallSummary(),
+        title="PIPELINE TEST",
+        graphics_status="Applied 'cinematic-fast'",
+        cache_status="Purged 15 files",
+    )
+    out = capsys.readouterr().out
+    assert "Graphics & FPS optimization" in out
+    assert "DirectX/Vulkan cache purge" in out
+
+

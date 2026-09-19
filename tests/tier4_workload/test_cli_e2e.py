@@ -159,5 +159,17 @@ def test_cli_user_dir_flag(tmp_path: Path) -> None:
     res = run_cli("--user-dir", str(user_dir), "--show-paths")
     assert res.returncode == 0
     assert str(user_dir).lower() in res.stdout.lower()
+    assert "status" in res.stdout.lower()
+    assert "path cache" in res.stdout.lower()
+
+
+def test_cli_save_paths_flag(tmp_path: Path) -> None:
+    """Test --save-paths saves explicit configuration without error."""
+    user_dir = tmp_path / "saved_user"
+    user_dir.mkdir()
+    res = run_cli("--user-dir", str(user_dir), "--save-paths")
+    assert res.returncode == 0
+    assert "successfully saved" in res.stdout.lower()
+
 
 

@@ -12,7 +12,12 @@ from beamng_mod_fixer.core.graphics_optimizer import (
     OPTIMIZATION_PRESETS,
     optimize_settings,
 )
-from beamng_mod_fixer.core.path_resolver import detect_beamng_user_dir, resolve_beamng_paths
+from beamng_mod_fixer.core.path_resolver import (
+    detect_beamng_user_dir,
+    get_cache_config_path,
+    resolve_beamng_paths,
+    save_cached_paths,
+)
 from beamng_mod_fixer.core.zip_processor import scan_and_fix_mods
 from beamng_mod_fixer.models import ModStatus
 from beamng_mod_fixer.ui import InteractiveCLI, print_splash_banner
@@ -70,6 +75,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--show-paths",
         action="store_true",
         help="Display detected BeamNG directories and exit.",
+    )
+    paths_group.add_argument(
+        "--save-paths",
+        action="store_true",
+        help="Save the currently resolved paths (-u, -m, etc.) to persistent cache and exit.",
     )
 
     # Actions
@@ -191,12 +201,33 @@ def main(argv: Optional[List[str]] = None) -> int:
     settings_dir = paths["settings_dir"]
     cache_dir = paths["cache_dir"]
 
+    if args.save_paths:
+        saved = save_cached_paths(paths, force=True)
+        if saved:
+            print(f"Successfully saved active paths to persistent cache ({get_cache_config_path()}).")
+            return 0
+        else:
+            logger.error("Failed saving active paths to persistent cache.")
+            return 1
+
     if args.show_paths:
         print("Detected BeamNG.drive Paths:")
         print(f"  User Directory : {paths['user_dir']}")
         print(f"  Mods Directory : {paths['mods_dir']}")
         print(f"  Settings Dir   : {paths['settings_dir']}")
         print(f"  Cache/Temp Dir : {paths['cache_dir']}")
+        user_ok = "✔ [FOUND]" if paths['user_dir'].exists() else "❌ [NOT FOUND]"
+        mods_ok = "✔ [FOUND]" if paths['mods_dir'].exists() else "❌ [NOT FOUND]"
+        mod_count = 0
+        if paths['mods_dir'].exists() and paths['mods_dir'].is_dir():
+            try:
+                mod_count = len([p for p in paths['mods_dir'].iterdir() if p.is_file() and p.suffix.lower() == ".zip"])
+            except OSError:
+                pass
+        cache_file = get_cache_config_path()
+        cache_info = f"Active ({cache_file})" if cache_file.exists() else "Not cached"
+        print(f"  Status         : User Dir {user_ok}, Mods Dir {mods_ok} ({mod_count} mod archives detected)")
+        print(f"  Path Cache     : {cache_info}")
         return 0
 
     # Determine actions

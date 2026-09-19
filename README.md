@@ -3,7 +3,7 @@
 [![CI](https://github.com/saleqss/beamng-mod-fixer/actions/workflows/ci.yml/badge.svg)](https://github.com/saleqss/beamng-mod-fixer/actions)
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-242%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
+[![Tests](https://img.shields.io/badge/tests-251%20passed-brightgreen)](https://github.com/saleqss/beamng-mod-fixer)
 [![BeamNG Compatibility](https://img.shields.io/badge/BeamNG.drive-0.30%20--%200.34%2B-orange)](https://beamng.com)
 
 > **The all-in-one community standard toolkit for BeamNG.drive.** Automatically resolves **all major mod breakages** after game updates (0.30 - 0.34+): pitch-black headlights, orange `"NO TEXTURE"`, broken `materials.cs`, frozen vehicles & exploding differentials, tire blowouts (`pressurePSI`), silent engines & pre-FMOD audio crashes, and fatal vehicle Lua errors. Deploys cinematic high-FPS graphics presets and cleans corrupt shader caches.
@@ -155,11 +155,11 @@ GBEAM FIX provides tailored, balanced presets:
 
 GBEAM FIX automatically and instantly finds your BeamNG.drive installation, even on customized multi-drive configurations, secondary game SSDs, or portable setups:
 
-1. **AppData Version Topology**: Automatically scans `%LOCALAPPDATA%\BeamNG\BeamNG.drive\` across all version subdirectories (`current`, `latest`, `0.34`, `0.33`, `0.32`, `0.31`, `0.30`, etc.), intelligently scoring and picking the most active folder (favoring folders with active mod archives or newest modification time).
-2. **Windows Registry Steam Discovery**: Queries `HKCU\Software\Valve\Steam` and `HKLM\SOFTWARE\Valve\Steam` to locate Steam, parses `libraryfolders.vdf` across all installed library drives for Steam App ID `284160`, and inspects `startup.ini` for custom `UserPath` redirections.
-3. **Multi-Drive Scanning**: Fast detection across root and game paths on secondary drives (`D:\`, `E:\`, `F:\`... `BeamNG.drive`, `Games\BeamNG.drive`).
-4. **0ms Instant Persistent Cache**: Saves verified paths to `%LOCALAPPDATA%\BeamNGModFixer\config.json` (or `~/.beamng_fixer_paths.json`). Subsequent runs resolve paths in **0ms** without re-scanning.
-5. **Interactive Management & CLI Overrides**: View, customize, or validate directories via Menu Option `[9]` or via CLI flags (`-u`, `--user-dir`, `-m`, `--mods-dir`, `--show-paths`).
+1. **AppData Version Topology**: Automatically scans `%LOCALAPPDATA%\BeamNG\BeamNG.drive\` across all version subdirectories (`current`, `latest`, `0.34`, `0.33`, `0.32`, `0.31`, `0.30`, etc.), intelligently scoring and picking the most active folder (favoring folders with active mod archives, recent game launch logs like `beamng.log`, and newest modification time).
+2. **Windows Registry Steam Discovery**: Queries `HKCU\Software\Valve\Steam` and `HKLM\SOFTWARE\Valve\Steam` to locate Steam, parses `libraryfolders.vdf` across all installed library drives for Steam App ID `284160`, inspects `appmanifest_284160.acf` for exact `installdir`, and parses `startup.ini` for custom `UserPath` redirections.
+3. **Multi-Drive Scanning**: Windows native sub-millisecond logical drive bitmask enumeration (`GetLogicalDrives`) with optical/CD-ROM filtering and error suppression, rapidly searching game paths on secondary drives (`D:\`, `E:\`, `F:\`... `BeamNG.drive`, `Games\BeamNG.drive`, `SteamLibrary`).
+4. **0ms Instant Persistent Cache**: Saves verified paths to `%LOCALAPPDATA%\BeamNGModFixer\config.json` (or `~/.beamng_fixer_paths.json`) with atomic `.tmp` swap. Subsequent runs resolve paths in **0ms** without re-scanning.
+5. **Interactive Management & CLI Overrides**: View, customize, or validate directories via Menu Option `[9]` or via CLI flags (`-u`, `--user-dir`, `-m`, `--mods-dir`, `--show-paths`, `--save-paths`).
 
 ---
 
@@ -181,7 +181,7 @@ MAIN CONTROL MENU (ГЛАВНОЕ МЕНЮ):
   [0] 🚪 Exit
 ```
 
-- **Unified 1-Click Pipeline (Option [1])**: Executes all 7 repair and optimization stages in one seamless pipeline: Headlights & Optics, Materials Doctor, Drivetrain & JBeam Physics, Sound Modernizer, Lua Safety Guard, Cinematic-Fast Graphics Preset, and DirectX/Vulkan Shader Cache Purge.
+- **Unified 1-Click Pipeline (Option [1])**: Executes all 7 repair and optimization stages in one seamless pipeline: Headlights & Optics, Materials Doctor, Drivetrain & JBeam Physics, Sound Modernizer, Lua Safety Guard, Cinematic-Fast Graphics Preset, and DirectX/Vulkan Shader Cache Purge. Complete status and freed disk space are reported in real time.
 - **Two-Way Studio Navigation**: Executing any repair pass automatically transitions to the **Fix Results & Diagnostic Studio**, displaying live metric counters, detailed file-by-file notices, and instant 1-click return (`[1]` or Enter) to the Main Control Menu.
 - **Adaptive Multi-Pass Engine**: Automatically applies fallback heuristics if non-standard mod configurations or conflicting definitions are detected, guaranteeing a 100% playable vehicle state.
 
@@ -195,8 +195,11 @@ For headless execution, server scripts, or batch operations:
 # 1-Click Global Fix (All 7 repairs + graphics + cache)
 agy-gbeam-fix --all
 
-# Display detected BeamNG paths and exit
+# Display detected BeamNG paths, status, and mod count
 agy-gbeam-fix --show-paths
+
+# Save custom directory configuration permanently to 0ms persistent cache
+agy-gbeam-fix --mods-dir "D:/BeamNG_Mods" --save-paths
 
 # Specify custom BeamNG user data directory
 agy-gbeam-fix --user-dir "%LOCALAPPDATA%/BeamNG/BeamNG.drive/0.34" --all
@@ -227,7 +230,7 @@ agy-gbeam-fix --all --dry-run
 
 ## 🧪 Comprehensive Automated Test Suite
 
-GBEAM FIX is rigorously verified by **242 hermetic automated tests** across five testing tiers:
+GBEAM FIX is rigorously verified by **251 hermetic automated tests** across five testing tiers:
 
 ```bash
 python -m pytest -v

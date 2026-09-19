@@ -32,6 +32,7 @@ from beamng_mod_fixer.core.path_resolver import (
     validate_beamng_dir,
 )
 from beamng_mod_fixer.core.zip_processor import process_mod_archive, scan_and_fix_mods
+from beamng_mod_fixer.exceptions import BeamNGPathNotFoundError
 from beamng_mod_fixer.models import ModStatus, OverallSummary
 
 # Enable Windows ANSI virtual terminal processing if available
@@ -172,7 +173,8 @@ class InteractiveCLI:
             print(f"  {Colors.RED}[0] 🚪 Exit{Colors.RESET}")
 
             try:
-                choice = input(f"\n{Colors.BOLD}Select an option [0-9] (default: 1): {Colors.RESET}").strip()
+                raw_choice = input(f"\n{Colors.BOLD}Select an option [0-9] (default: 1): {Colors.RESET}").strip()
+                choice = raw_choice.strip("[]")
             except (KeyboardInterrupt, EOFError):
                 print(f"\n{Colors.YELLOW}Operation cancelled by user.{Colors.RESET}")
                 return 0
@@ -246,41 +248,65 @@ class InteractiveCLI:
             elif r.status in (ModStatus.LOCKED.value, ModStatus.CORRUPT.value, ModStatus.ENCRYPTED.value):
                 print(f"  [{idx:02d}/{tot:02d}] {Colors.YELLOW}⚠ {p.name}: Skipped ({r.status.upper()}){Colors.RESET}")
 
-        summary = scan_and_fix_mods(
-            self.paths["mods_dir"],
-            dry_run=self.dry_run,
-            selective=True,
-            fix_materials=True,
-            fix_drivetrain=True,
-            fix_sound=True,
-            fix_lua=True,
-            clean_junk=True,
-            progress_callback=_progress_cb,
-        )
+        mods_dir = self.paths["mods_dir"]
+        if not mods_dir.exists():
+            try:
+                mods_dir.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                pass
+
+        try:
+            summary = scan_and_fix_mods(
+                mods_dir,
+                dry_run=self.dry_run,
+                selective=True,
+                fix_materials=True,
+                fix_drivetrain=True,
+                fix_sound=True,
+                fix_lua=True,
+                clean_junk=True,
+                progress_callback=_progress_cb,
+            )
+        except BeamNGPathNotFoundError as e:
+            print(f"  {Colors.YELLOW}⚠ Mods scan notice: {e}{Colors.RESET}")
+            summary = OverallSummary()
+
+        graphics_status = "Skipped"
+        cache_status = "Skipped"
 
         # Stage 6: Graphics & FPS Optimizer
         print(f"\n{Colors.BOLD}{Colors.CYAN}[Stage 6/7]{Colors.RESET} {Colors.WHITE}Deploying 'cinematic-fast' Graphics & FPS Optimization Preset...{Colors.RESET}")
         try:
             opt_res = optimize_settings(self.paths["settings_dir"], preset="cinematic-fast", dry_run=self.dry_run)
+            graphics_status = f"Applied 'cinematic-fast' ({len(opt_res.applied_keys)} keys tuned)"
             print(f"  {Colors.GREEN}✔ Applied 60FPS dynamic reflections, soft shadows, and clustered lighting ({len(opt_res.applied_keys)} keys tuned){Colors.RESET}")
             if opt_res.backup_created:
                 print(f"    Settings backup saved: {opt_res.backup_path}")
         except Exception as e:
+            graphics_status = f"Warning: {e}"
             print(f"  {Colors.YELLOW}⚠ Graphics optimize note: {e}{Colors.RESET}")
 
         # Stage 7: Cache Purge
         print(f"\n{Colors.BOLD}{Colors.CYAN}[Stage 7/7]{Colors.RESET} {Colors.WHITE}Purging compiled DirectX/Vulkan shader binaries in temp/...{Colors.RESET}")
         try:
             cache_res = clean_shader_cache(self.paths["cache_dir"], dry_run=self.dry_run)
+            cache_status = f"Purged {cache_res.files_deleted} files ({cache_res.bytes_freed / 1024 / 1024:.2f} MB freed)"
             print(f"  {Colors.GREEN}✔ Purged {cache_res.files_deleted} cache files ({cache_res.bytes_freed / 1024 / 1024:.2f} MB freed){Colors.RESET}")
         except Exception as e:
+            cache_status = f"Warning: {e}"
             print(f"  {Colors.YELLOW}⚠ Cache clean note: {e}{Colors.RESET}")
 
         print(f"\n{Colors.GREEN}{Colors.BOLD}✔ All 7 Pipeline Stages Completed Successfully!{Colors.RESET}")
-        time.sleep(1)
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            time.sleep(0.5)
 
         # Transition into dedicated Post-Fix Studio Menu
-        self.menu_fix_results(summary, title="🚀 ГЛОБАЛЬНЫЙ ФИКС — РЕЗУЛЬТАТЫ / 1-CLICK GLOBAL FIX RESULTS")
+        self.menu_fix_results(
+            summary,
+            title="🚀 ГЛОБАЛЬНЫЙ ФИКС — РЕЗУЛЬТАТЫ / 1-CLICK GLOBAL FIX RESULTS",
+            graphics_status=graphics_status,
+            cache_status=cache_status,
+        )
 
     # ==========================================================================
     # Submenu: Headlights & Optics Studio
@@ -557,7 +583,7 @@ class InteractiveCLI:
                     is_valid, msg, resolved = validate_beamng_dir(new_path_str)
                     if is_valid:
                         self.paths = resolved
-                        save_cached_paths(self.paths)
+                        save_cached_paths(self.paths, force=True)
                         print(f"\n{Colors.GREEN}✔ {msg}{Colors.RESET}")
                     else:
                         print(f"\n{Colors.RED}❌ {msg}{Colors.RESET}")
@@ -571,7 +597,7 @@ class InteractiveCLI:
                     is_valid, msg, resolved = validate_beamng_dir(new_mods_str, is_mods_dir=True)
                     if is_valid:
                         self.paths = resolved
-                        save_cached_paths(self.paths)
+                        save_cached_paths(self.paths, force=True)
                         print(f"\n{Colors.GREEN}✔ {msg}{Colors.RESET}")
                     else:
                         print(f"\n{Colors.RED}❌ {msg}{Colors.RESET}")
@@ -594,7 +620,13 @@ class InteractiveCLI:
     # ==========================================================================
     # Dedicated Post-Fix Results Studio & Diagnostic Menu
     # ==========================================================================
-    def menu_fix_results(self, summary: OverallSummary, title: str = "FIX RESULTS & DIAGNOSTIC STUDIO") -> None:
+    def menu_fix_results(
+        self,
+        summary: OverallSummary,
+        title: str = "FIX RESULTS & DIAGNOSTIC STUDIO",
+        graphics_status: Optional[str] = None,
+        cache_status: Optional[str] = None,
+    ) -> None:
         """Dedicated post-fix result and diagnostic studio menu.
 
         Directly fulfills the requirement:
@@ -603,7 +635,12 @@ class InteractiveCLI:
         while True:
             clear_screen()
             print(SPLASH_BANNER)
-            self._print_summary_report(summary, title=title)
+            self._print_summary_report(
+                summary,
+                title=title,
+                graphics_status=graphics_status,
+                cache_status=cache_status,
+            )
 
             print(f"\n{Colors.BOLD}{Colors.WHITE}POST-FIX ACTIONS & NAVIGATION:{Colors.RESET}")
             print(f"  {Colors.GREEN}{Colors.BOLD}[1] 🏠 Return to Main Control Menu (Default){Colors.RESET}")
@@ -613,7 +650,8 @@ class InteractiveCLI:
             print(f"  {Colors.RED}[0] 🚪 Exit GBEAM FIX{Colors.RESET}")
 
             try:
-                choice = input(f"\n{Colors.BOLD}Select an action [0-4] (default: 1): {Colors.RESET}").strip()
+                raw_choice = input(f"\n{Colors.BOLD}Select an action [0-4] (default: 1): {Colors.RESET}").strip()
+                choice = raw_choice.strip("[]")
             except (KeyboardInterrupt, EOFError):
                 return
 
@@ -661,7 +699,13 @@ class InteractiveCLI:
     # ==========================================================================
     # Report Printer
     # ==========================================================================
-    def _print_summary_report(self, summary: OverallSummary, title: str = "SUMMARY REPORT") -> None:
+    def _print_summary_report(
+        self,
+        summary: OverallSummary,
+        title: str = "SUMMARY REPORT",
+        graphics_status: Optional[str] = None,
+        cache_status: Optional[str] = None,
+    ) -> None:
         """Format and print a structured diagnostic summary report."""
         print("\n" + f"{Colors.CYAN}═" * 70 + f"{Colors.RESET}")
         print(f"{Colors.BOLD}{Colors.WHITE}  {title}{Colors.RESET}")
@@ -675,6 +719,10 @@ class InteractiveCLI:
         print(f"  Drivetrain & physics repaired: {Colors.GREEN}{summary.drivetrains_fixed}{Colors.RESET}")
         print(f"  FMOD audio events modernized : {Colors.GREEN}{summary.sounds_fixed}{Colors.RESET}")
         print(f"  Vehicle Lua scripts guarded  : {Colors.GREEN}{summary.lua_fixed}{Colors.RESET}")
+        if graphics_status:
+            print(f"  Graphics & FPS optimization  : {Colors.CYAN}{graphics_status}{Colors.RESET}")
+        if cache_status:
+            print(f"  DirectX/Vulkan cache purge   : {Colors.GREEN}{cache_status}{Colors.RESET}")
         print(f"  Archive junk files removed   : {Colors.GREEN}{summary.junk_cleaned}{Colors.RESET}")
         print(f"  Skipped (locked / in-use)    : {Colors.YELLOW}{summary.skipped_locked}{Colors.RESET}")
         print(f"  Skipped (corrupt)            : {Colors.RED}{summary.skipped_corrupt}{Colors.RESET}")

@@ -19,6 +19,9 @@ from beamng_mod_fixer.core.path_resolver import (
     clear_cached_paths,
     detect_beamng_user_dir,
     find_candidate_user_dirs,
+    find_drive_root_candidates,
+    find_steam_beamng_dirs,
+    get_available_drives,
     get_cache_config_path,
     load_cached_paths,
     parse_startup_ini_userpath,
@@ -231,3 +234,91 @@ def test_resolve_beamng_paths_explicit_override(tmp_path: Path) -> None:
 
     paths = resolve_beamng_paths(mods_dir=custom_mods, use_cache=False, save_cache=False)
     assert paths["mods_dir"].resolve() == custom_mods.resolve()
+
+
+def test_get_available_drives() -> None:
+    """Test that get_available_drives executes cleanly and returns valid root strings."""
+    drives = get_available_drives()
+    assert isinstance(drives, list)
+    if os.name == "nt":
+        assert len(drives) >= 1
+        assert any(d.startswith("C:") for d in drives)
+
+
+def test_parse_steam_library_folders_excludes_numeric_app_sizes(tmp_path: Path) -> None:
+    """Test that modern VDF app byte counts (e.g. 53633513758) are not parsed as library paths."""
+    vdf = tmp_path / "libraryfolders.vdf"
+    vdf.write_text("""
+    "libraryfolders"
+    {
+        "0"
+        {
+            "path" "C:\\\\Games\\\\Steam"
+            "apps"
+            {
+                "284160" "53633513758"
+                "730" "71589381210"
+            }
+        }
+    }
+    """, encoding="utf-8")
+
+    parsed = parse_steam_library_folders(vdf)
+    parsed_strs = [str(p) for p in parsed]
+    # "53633513758" and "71589381210" must NEVER be returned as library paths
+    for s in parsed_strs:
+        assert "53633513758" not in s
+        assert "71589381210" not in s
+
+
+def test_find_steam_beamng_dirs_with_appmanifest(tmp_path: Path) -> None:
+    """Test discovering BeamNG game directory via Steam appmanifest and startup.ini."""
+    steam_lib = tmp_path / "SteamLib"
+    steamapps = steam_lib / "steamapps"
+    steamapps.mkdir(parents=True)
+
+    # 1. Write appmanifest_284160.acf
+    manifest = steamapps / "appmanifest_284160.acf"
+    manifest.write_text('"AppState" { "appid" "284160" "installdir" "BeamNG_Custom" }', encoding="utf-8")
+
+    # 2. Create game dir with startup.ini pointing to user data
+    game_dir = steamapps / "common" / "BeamNG_Custom"
+    game_dir.mkdir(parents=True)
+    user_target = tmp_path / "custom_user_folder"
+    user_target.mkdir()
+    (game_dir / "startup.ini").write_text(f'[filesystem]\nUserPath = "{str(user_target)}"\n', encoding="utf-8")
+
+    # Mock get_steam_install_paths and parse_steam_library_folders
+    with mock.patch("beamng_mod_fixer.core.path_resolver.get_steam_install_paths", return_value=[steam_lib]):
+        with mock.patch("beamng_mod_fixer.core.path_resolver.parse_steam_library_folders", return_value=[steam_lib]):
+            dirs = find_steam_beamng_dirs()
+            resolved_dirs = [d.resolve() for d in dirs]
+            assert user_target.resolve() in resolved_dirs
+
+
+def test_score_candidate_user_dir_with_active_logs(tmp_path: Path) -> None:
+    """Test that candidate directories with active beamng.log receive activity bonus."""
+    cand1 = tmp_path / "cand1"
+    cand1.mkdir()
+    cand2 = tmp_path / "cand2"
+    cand2.mkdir()
+    (cand2 / "beamng.log").write_text("Engine initialized", encoding="utf-8")
+
+    score1 = score_candidate_user_dir(cand1)
+    score2 = score_candidate_user_dir(cand2)
+    assert score2 > score1
+
+
+def test_validate_beamng_dir_relative_and_content_mods(tmp_path: Path) -> None:
+    """Test validate_beamng_dir with relative path and content/mods folder."""
+    # Test content/mods game topology
+    game_dir = tmp_path / "game_root"
+    content_mods = game_dir / "content" / "mods"
+    content_mods.mkdir(parents=True)
+    (content_mods / "addon.zip").write_bytes(b"PK\x05\x06" + b"\x00" * 18)
+
+    is_valid, msg, paths = validate_beamng_dir(str(game_dir))
+    assert is_valid is True
+    assert paths["mods_dir"].resolve() == content_mods.resolve()
+    assert "1 mod archives" in msg
+
